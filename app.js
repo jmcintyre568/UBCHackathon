@@ -57,8 +57,30 @@ document.querySelectorAll('[data-contract]').forEach(button => button.addEventLi
 }));
 const walletButton = document.getElementById('connectWallet');
 const walletLabel = document.getElementById('walletLabel');
+const walletBalance = document.getElementById('walletBalance');
+const DEVNET_RPC = 'https://api.devnet.solana.com';
 let connectedWallet = null;
 function shortAddress(address) { return `${address.slice(0, 4)}…${address.slice(-4)}`; }
+async function refreshDevnetBalance(address) {
+  walletBalance.textContent = 'Reading Devnet balance…';
+  walletBalance.classList.remove('has-value', 'error');
+  try {
+    const response = await fetch(DEVNET_RPC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getBalance', params: [address, { commitment: 'confirmed' }] }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) throw new Error('RPC request failed');
+    const result = await response.json();
+    if (result.error || typeof result.result?.value !== 'number') throw new Error('Unexpected RPC response');
+    walletBalance.textContent = `${(result.result.value / 1_000_000_000).toFixed(4)} SOL · Devnet`;
+    walletBalance.classList.add('has-value');
+  } catch {
+    walletBalance.textContent = 'Devnet balance unavailable';
+    walletBalance.classList.add('error');
+  }
+}
 walletButton.addEventListener('click', async () => {
   const provider = window.solana;
   if (!provider?.isPhantom) {
@@ -70,6 +92,8 @@ walletButton.addEventListener('click', async () => {
     try { await provider.disconnect(); } catch { /* the wallet may already be disconnected */ }
     connectedWallet = null;
     walletLabel.textContent = 'Connect Phantom';
+    walletBalance.textContent = 'Connect to read Devnet balance';
+    walletBalance.classList.remove('has-value', 'error');
     walletButton.classList.remove('connected');
     walletButton.querySelector('.connect-arrow').textContent = '↗';
     notify('Wallet disconnected.');
@@ -79,6 +103,7 @@ walletButton.addEventListener('click', async () => {
     const response = await provider.connect();
     connectedWallet = response.publicKey.toString();
     walletLabel.textContent = shortAddress(connectedWallet);
+    refreshDevnetBalance(connectedWallet);
     walletButton.classList.add('connected');
     walletButton.querySelector('.connect-arrow').textContent = '×';
     notify(`Connected ${shortAddress(connectedWallet)}. Switch Phantom to Devnet before transactions.`);
@@ -90,6 +115,7 @@ window.addEventListener('load', () => {
   if (window.solana?.isPhantom && window.solana.isConnected && window.solana.publicKey) {
     connectedWallet = window.solana.publicKey.toString();
     walletLabel.textContent = shortAddress(connectedWallet);
+    refreshDevnetBalance(connectedWallet);
     walletButton.classList.add('connected');
     walletButton.querySelector('.connect-arrow').textContent = '×';
   }
@@ -99,12 +125,15 @@ window.addEventListener('DOMContentLoaded', () => {
     window.solana.on('accountChanged', publicKey => {
       connectedWallet = publicKey?.toString() ?? null;
       walletLabel.textContent = connectedWallet ? shortAddress(connectedWallet) : 'Connect Phantom';
+      if (connectedWallet) refreshDevnetBalance(connectedWallet);
+      else walletBalance.textContent = 'Connect to read Devnet balance';
       walletButton.classList.toggle('connected', Boolean(connectedWallet));
       walletButton.querySelector('.connect-arrow').textContent = connectedWallet ? '×' : '↗';
     });
     window.solana.on('disconnect', () => {
       connectedWallet = null;
       walletLabel.textContent = 'Connect Phantom';
+      walletBalance.textContent = 'Connect to read Devnet balance';
       walletButton.classList.remove('connected');
       walletButton.querySelector('.connect-arrow').textContent = '↗';
     });

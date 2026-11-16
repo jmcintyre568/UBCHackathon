@@ -13,7 +13,7 @@ Open `index.html` in a browser. There is no build step or package install.
 - Buttons and feedback for profile, credentials, and contract actions.
 - Demo data is static and clearly presented as a test-network experience.
 
-The milestone generator and marketplace data are currently demo placeholders. The wallet button connects to Phantom in the browser when the extension is installed; it only reads the public wallet address. It does not verify Phantom's selected cluster or submit transactions. The UI must not be presented as real escrow or onchain reputation yet.
+The milestone generator and marketplace data are currently demo placeholders. The wallet button connects to Phantom in the browser when the extension is installed and reads that address's SOL balance from the configured Solana Devnet RPC. It does not verify Phantom's selected cluster or submit transactions. The UI must not be presented as real escrow or onchain reputation yet.
 
 ## Next steps to make this real
 
@@ -23,4 +23,4 @@ The milestone generator and marketplace data are currently demo placeholders. Th
 4. Add an API-backed scope parser. Keep user confirmation before any generated milestones become contract terms.
 5. Add a Solana-compatible reputation attestation flow after settlement.
 
-The team will need Phantom, Devnet SOL for transaction fees, a Solana Devnet RPC endpoint, and a deployed program ID for real chain interactions. We also need an AI API key (for example, OpenAI) to make the scope parser real; keep it server-side and never put secrets in browser code.
+The current balance read uses Solana's public Devnet RPC and needs no API key. For real transactions, the team will need Phantom, Devnet SOL for transaction fees, a reliable Solana Devnet RPC endpoint, and a deployed program ID. We also need an AI API key (for example, OpenAI) to make the scope parser real; keep it server-side and never put secrets in browser code.
