@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f5f4ef" />
+  <title>TrustLancer — work with confidence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="wallet.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#home" aria-label="TrustLancer home"><span class="brand-mark">t<span>l</span></span><span>trustlancer</span></a>
+      <div class="workspace-label">WORKSPACE</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-item active" href="#home"><span class="nav-icon">◫</span> Overview</a>
+        <a class="nav-item" href="#explore"><span class="nav-icon">⌕</span> Explore work</a>
+        <a class="nav-item" href="#contracts"><span class="nav-icon">▤</span> Contracts <span class="nav-count">2</span></a>
+        <a class="nav-item" href="#inbox"><span class="nav-icon">✉</span> Messages <span class="unread-dot"></span></a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="chain-card"><div class="chain-head"><span class="chain-pulse"></span> SOLANA DEVNET</div><div class="chain-name">Solana <span>DEV</span></div><button class="wallet-connect" id="connectWallet"><span class="wallet-dot"></span><span id="walletLabel">Connect Phantom</span><span class="connect-arrow">↗</span></button></div>
+        <a class="profile-mini" href="#profile"><div class="avatar avatar-sm">JM</div><div><b>Jordan Miller</b><small>Freelancer account</small></div><span class="more">•••</span></a>
+      </div>
+    </aside>
+
+    <main class="main-content" id="home">
+      <header class="topbar"><div class="breadcrumbs">Workspace <span>/</span> Overview <span class="demo-tag">DEMO DATA</span></div><div class="top-actions"><button class="icon-button" aria-label="Notifications">♧<i></i></button><div class="top-avatar">JM</div></div></header>
+      <section class="welcome-row"><div><div class="eyebrow"><span class="eyebrow-line"></span> SUNDAY, NOVEMBER 15, 2026</div><h1>Good morning, Jordan <span class="wave">✳</span></h1><p class="welcome-sub">Your work, your reputation, your terms.</p></div><button class="primary-button" id="newProject"><span>＋</span> Create a project</button></section>
+
+      <section class="stats-grid" aria-label="Account summary">
+        <article class="stat-card"><div class="stat-top"><span>ACTIVE ESCROW</span><span class="stat-icon green">⌑</span></div><div class="stat-value">$2,840<span class="stat-unit">USDC</span></div><div class="stat-foot"><span class="status-dot"></span> 2 funded contracts</div></article>
+        <article class="stat-card"><div class="stat-top"><span>THIS MONTH</span><span class="stat-icon violet">↗</span></div><div class="stat-value">$4,260</div><div class="stat-foot positive">↗ 18% <span class="muted">vs last month</span></div></article>
+        <article class="stat-card"><div class="stat-top"><span>REPUTATION</span><span class="stat-icon yellow">✦</span></div><div class="stat-value">4.9<span class="star">★</span><span class="out-of">/ 5</span></div><div class="stat-foot">Based on <b>12 verified projects</b></div></article>
+        <article class="stat-card"><div class="stat-top"><span>PORTABLE PROOF</span><span class="stat-icon blue">⬡</span></div><div class="stat-value">8<span class="stat-unit"> attestations</span></div><div class="stat-foot"><span class="verified-check">✓</span> Verified onchain</div></article>
+      </section>
+
+      <section class="content-grid">
+        <div class="left-column">
+          <div class="section-heading"><div><div class="section-kicker">YOUR WORK</div><h2>Active contracts <span class="heading-count">2</span></h2></div><a href="#contracts" class="text-link">View all <span>→</span></a></div>
+          <div class="contracts-list">
+            <article class="contract-card"><div class="contract-top"><div class="client-avatar ca-coral">S</div><div class="contract-title"><h3>Brand identity refresh</h3><p>with <b>Studio North</b> <span class="verified-inline">✓</span></p></div><span class="contract-status in-progress"><i></i> In progress</span></div><div class="contract-meta"><span><span class="meta-icon">◷</span> Due in 4 days</span><span><span class="meta-icon">◇</span> 2 of 3 milestones</span><b>$1,800 <small>USDC</small></b></div><div class="progress-track"><span style="width:66%"></span></div><div class="contract-bottom"><span class="funded-label"><span>●</span> $1,200 funded in escrow</span><button class="subtle-button" data-contract="brand">View contract <span>→</span></button></div></article>
+            <article class="contract-card"><div class="contract-top"><div class="client-avatar ca-blue">P</div><div class="contract-title"><h3>Landing page development</h3><p>with <b>Paul Rivera</b> <span class="verified-inline">✓</span></p></div><span class="contract-status review"><i></i> In review</span></div><div class="contract-meta"><span><span class="meta-icon">◷</span> Submitted 2 hours ago</span><span><span class="meta-icon">◇</span> 1 of 2 milestones</span><b>$1,040 <small>USDC</small></b></div><div class="progress-track"><span class="review-bar" style="width:50%"></span></div><div class="contract-bottom"><span class="funded-label"><span>●</span> $520 funded in escrow</span><button class="subtle-button" data-contract="landing">Review submission <span>→</span></button></div></article>
+          </div>
+          <div class="section-heading explore-heading" id="explore"><div><div class="section-kicker">HAND-PICKED FOR YOU</div><h2>Projects worth a look</h2></div><a href="#explore" class="text-link">Browse projects <span>→</span></a></div>
+          <div class="project-grid">
+            <article class="project-card"><div class="project-card-top"><div class="company-logo logo-lime">f</div><span class="match-pill">✦ 96% match</span></div><div class="project-tag">BRAND & DESIGN</div><h3>Design a visual identity for a climate tech startup</h3><p class="project-client">Ferno Labs <span class="verified-inline">✓</span> · Posted 2h ago</p><div class="project-skills"><span>Branding</span><span>Visual identity</span><span>Figma</span></div><div class="project-card-foot"><div><small>BUDGET</small><b>$1,200 – $2,000</b></div><button class="arrow-button" aria-label="View project">↗</button></div></article>
+            <article class="project-card"><div class="project-card-top"><div class="company-logo logo-lilac">m</div><span class="match-pill">✦ 89% match</span></div><div class="project-tag">PRODUCT DESIGN</div><h3>Mobile app UI for a new personal finance tool</h3><p class="project-client">Morrow <span class="verified-inline">✓</span> · Posted 5h ago</p><div class="project-skills"><span>UI/UX</span><span>Mobile</span><span>Prototyping</span></div><div class="project-card-foot"><div><small>BUDGET</small><b>$2,500 – $4,000</b></div><button class="arrow-button" aria-label="View project">↗</button></div></article>
+          </div>
+        </div>
+        <aside class="right-column">
+          <div class="section-heading side-heading"><div><div class="section-kicker">YOUR PROFILE</div><h2>Trust score</h2></div><button class="more-button" aria-label="More options">•••</button></div>
+          <div class="trust-card"><div class="trust-score-wrap"><div class="score-ring"><div><b>92</b><small>TRUST</small></div></div><div><div class="trust-rating">Excellent standing <span>✦</span></div><p>Top 8% of freelancers<br>in your category</p></div></div><div class="trust-divider"></div><div class="trust-points"><div><span class="point-icon green">✓</span><span>On-time delivery</span><b>100%</b></div><div><span class="point-icon violet">✦</span><span>Client satisfaction</span><b>4.9 / 5</b></div><div><span class="point-icon blue">◇</span><span>Completed projects</span><b>12</b></div></div><button class="outline-button" id="shareProfile">Share verified profile <span>↗</span></button></div>
+          <div class="reputation-card"><div class="reputation-top"><div><div class="section-kicker">PORTABLE REPUTATION</div><h3>Built on your work.</h3></div><div class="badge-art">✦</div></div><p>Your completed projects create verifiable credentials that belong to you — wherever you go.</p><div class="credential-row"><div class="credential-icon">✧</div><div><b>Reliable Collaborator</b><small>Credential · Solana Devnet demo</small></div><span class="credential-check">✓</span></div><button class="plain-link" id="viewCredentials">View all credentials <span>→</span></button></div>
+          <div class="activity-card"><div class="section-heading activity-heading"><div><div class="section-kicker">RECENT ACTIVITY</div><h3>Latest updates</h3></div><button class="more-button">•••</button></div><div class="activity-item"><div class="activity-icon activity-green">✓</div><div><b>Milestone approved</b><p>Landing page · $520 USDC released</p><small>Today at 9:42 AM</small></div></div><div class="activity-item"><div class="activity-icon activity-violet">⬡</div><div><b>Credential updated</b><p>On-time delivery badge renewed</p><small>Yesterday at 4:18 PM</small></div></div><div class="activity-item"><div class="activity-icon activity-blue">＋</div><div><b>New project match</b><p>Ferno Labs · 96% match</p><small>Yesterday at 11:06 AM</small></div></div></div>
+        </aside>
+      </section>
+      <footer class="footer"><span>© 2026 TrustLancer</span><span>Built for work that moves you. <span class="footer-heart">✳</span></span><span><a href="#help">Help center</a>　·　<a href="#terms">Terms</a></span></footer>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="modal-backdrop" id="projectModal" aria-hidden="true"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-header"><div><div class="section-kicker">AI SCOPE BUILDER · DEMO</div><h2 id="modalTitle">Start a new project</h2></div><button class="close-modal" aria-label="Close">×</button></div><p class="modal-intro">Describe the work in your own words. The demo will suggest milestones for you to review before a future escrow step.</p><label class="field-label" for="projectDescription">What do you need done?</label><textarea id="projectDescription" placeholder="e.g. Design a landing page for my new coffee brand. I need concepts, a polished Figma file, and mobile responsive layouts. Budget is around $1,500."></textarea><div class="field-row"><label>Budget range<select id="budget"><option>$500 – $1,500 USDC</option><option>$1,500 – $3,000 USDC</option><option>$3,000 – $5,000 USDC</option><option>Custom amount</option></select></label><label>Target timeline<select id="timeline"><option>2 weeks</option><option>1 week</option><option>1 month</option><option>Flexible</option></select></label></div><div id="generatedScope" class="generated-scope hidden"></div><div class="modal-actions"><span class="secure-note"><span>⬡</span> Escrow terms reviewable</span><button class="primary-button" id="generateScope">Generate milestones <span>→</span></button></div></section></div>
+  <script src="app.js"></script>
+</body>
+</html>
