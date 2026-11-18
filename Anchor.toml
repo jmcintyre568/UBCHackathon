@@ -1,12 +1,17 @@
+[toolchain]
+
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.devnet]
-trustlancer_escrow = "3pX5NKLru1UBDVckynWQxsgnJeUN3N1viy36Gk9TSn8d"
+trustlancer_escrow = "DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS"
+
+[programs.localnet]
+trustlancer_escrow = "DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS"
 
 [provider]
-cluster = "Devnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [workspace]

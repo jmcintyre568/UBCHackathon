@@ -10,9 +10,20 @@ Open `index.html` in a browser. There is no build step or package install.
 
 The `programs/trustlancer_escrow` Anchor program is the first onchain implementation step. It defines an SPL token escrow with up to eight ordered milestones, funding, freelancer submission by deliverable hash, client approval and release, dispute freeze, and a mutual refund that requires both parties to sign.
 
-This is a development scaffold, not deployable or audited yet. Disputes deliberately freeze the remaining funds; there is no arbitrator resolution or timeout/refund policy yet. The program currently accepts the original SPL Token Program and stores the selected mint, but does not enforce a canonical USDC mint. Do not use it with real funds.
+This is a development scaffold, not audited and not suitable for real funds. Disputes deliberately freeze the remaining funds; there is no arbitrator resolution or timeout/refund policy yet. The program accepts the original SPL Token Program and stores the selected mint, but does not enforce a canonical USDC mint.
 
-The program ID in `Anchor.toml` and `lib.rs` is a placeholder from the Anchor documentation. Once the Rust/Solana/Anchor toolchain is installed, run `anchor build` and `anchor keys sync` to generate/synchronize a project-owned program ID before deploying to Devnet. The project source has not been compiled in this workspace because the Rust and Anchor toolchain is not installed here.
+The program ID is generated for this project and must stay synchronized between `Anchor.toml`, `programs/trustlancer_escrow/src/lib.rs`, and the ignored `target/deploy/trustlancer_escrow-keypair.json`. Do not commit or share private key files.
+
+### Run escrow integration tests
+
+Install Node.js, npm, the Solana CLI, Rust, and Anchor CLI. Then run:
+
+```sh
+npm install
+npm test
+```
+
+The test command builds the program, starts a temporary local validator, deploys there, and runs tests for invalid milestone totals, ordered payouts, token accounting, and mutual refunds. It creates and removes a disposable test wallet and ledger under the ignored `target/` directory. It does not deploy to Devnet.
 
 ## Current prototype
 
@@ -25,7 +36,7 @@ The milestone generator and marketplace data are currently demo placeholders. Th
 
 ## Next steps to make this real
 
-1. Build and review the Anchor escrow scaffold, then add automated tests for authorization, token accounting, order, disputes, and refunds.
+1. Expand tests to cover authorization, disputes, and additional invalid transitions.
 2. Add a trusted Devnet USDC mint allowlist and a clearly defined dispute-resolution/timeout policy before deploying.
 3. Deploy to Solana Devnet and connect the frontend to the generated IDL for create, fund, submit, approve, dispute, and refund transactions.
 4. Replace local sample data with program account reads and transaction status.

@@ -2,9 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 
-// Placeholder program ID copied from the Anchor docs example. Generate the
-// project's own ID and run `anchor keys sync` before building or deploying.
-declare_id!("3pX5NKLru1UBDVckynWQxsgnJeUN3N1viy36Gk9TSn8d");
+// Keep this address synchronized with Anchor.toml and the program keypair.
+declare_id!("DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS");
 
 const MAX_MILESTONES: usize = 8;
 
@@ -73,7 +72,7 @@ pub mod trustlancer_escrow {
             authority: ctx.accounts.client.to_account_info(),
         };
         token::transfer_checked(
-            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts),
+            CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts),
             escrow.total_amount,
             ctx.accounts.mint.decimals,
         )?;
@@ -136,7 +135,7 @@ pub mod trustlancer_escrow {
             authority: escrow.to_account_info(),
         };
         token::transfer_checked(
-            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts)
+            CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts)
                 .with_signer(signer_seeds),
             amount,
             ctx.accounts.mint.decimals,
@@ -195,7 +194,7 @@ pub mod trustlancer_escrow {
             authority: escrow.to_account_info(),
         };
         token::transfer_checked(
-            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts)
+            CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts)
                 .with_signer(signer_seeds),
             refund_amount,
             ctx.accounts.mint.decimals,
@@ -329,7 +328,7 @@ pub struct ApproveMilestone<'info> {
         bump = escrow.bump
     )]
     pub escrow: Account<'info, Escrow>,
-    #[account(address = escrow.client)]
+    #[account(mut, address = escrow.client)]
     pub client: Signer<'info>,
     /// CHECK: Address is constrained to the freelancer stored in escrow.
     #[account(address = escrow.freelancer)]
