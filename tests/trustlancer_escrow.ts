@@ -1,5 +1,6 @@
 import { AnchorProvider, BN, Program, setProvider } from "@anchor-lang/core";
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   createMint,
   getAccount,
   getAssociatedTokenAddressSync,
@@ -129,7 +130,7 @@ describe("trustlancer_escrow", function () {
       mint: fixture.mint,
       vault: fixture.vault,
       freelancerTokenAccount,
-      associatedTokenProgram: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     };
@@ -175,7 +176,7 @@ describe("trustlancer_escrow", function () {
       mint: fixture.mint,
       vault: fixture.vault,
       clientTokenAccount: fixture.clientTokenAccount.address,
-      associatedTokenProgram: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     };
@@ -189,6 +190,120 @@ describe("trustlancer_escrow", function () {
 
     const state = await program.account.escrow.fetch(fixture.escrow);
     assert.equal(state.status.cancelled !== undefined, true);
+    assert.equal((await getAccount(connection, fixture.clientTokenAccount.address)).amount, fixture.total);
+  });
+
+  it("rejects outsider actions and approval before freelancer submission", async function () {
+    const fixture = await createFixture();
+    await fund(fixture);
+    const outsider = Keypair.generate();
+
+    await assert.rejects(
+      program.methods
+        .submitMilestone(0, Array.from({ length: 32 }, () => 9))
+        .accounts({ escrow: fixture.escrow, freelancer: outsider.publicKey })
+        .signers([outsider])
+        .rpc(),
+      (error: any) => error?.error?.errorCode?.code === "ConstraintHasOne",
+    );
+
+    await assert.rejects(
+      program.methods
+        .raiseDispute()
+        .accounts({ escrow: fixture.escrow, party: outsider.publicKey })
+        .signers([outsider])
+        .rpc(),
+      (error: any) => error?.error?.errorCode?.code === "UnauthorizedParty",
+    );
+
+    await assert.rejects(
+      program.methods
+        .approveMilestone(0)
+        .accounts({
+          escrow: fixture.escrow,
+          client: client.publicKey,
+          freelancer: fixture.freelancer.publicKey,
+          mint: fixture.mint,
+          vault: fixture.vault,
+          freelancerTokenAccount: getAssociatedTokenAddressSync(
+            fixture.mint,
+            fixture.freelancer.publicKey,
+          ),
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+      (error: any) => error?.error?.errorCode?.code === "MilestoneNotSubmitted",
+    );
+
+    const state = await program.account.escrow.fetch(fixture.escrow);
+    assert.equal(state.status.active !== undefined, true);
+    assert.equal((await getAccount(connection, fixture.vault)).amount, fixture.total);
+  });
+
+  it("freezes milestone actions during a dispute and allows a mutual disputed refund", async function () {
+    const fixture = await createFixture();
+    await fund(fixture);
+
+    await program.methods
+      .raiseDispute()
+      .accounts({ escrow: fixture.escrow, party: fixture.freelancer.publicKey })
+      .signers([fixture.freelancer])
+      .rpc();
+
+    const disputedState = await program.account.escrow.fetch(fixture.escrow);
+    assert.equal(disputedState.status.disputed !== undefined, true);
+
+    await assert.rejects(
+      program.methods
+        .submitMilestone(0, Array.from({ length: 32 }, () => 10))
+        .accounts({ escrow: fixture.escrow, freelancer: fixture.freelancer.publicKey })
+        .signers([fixture.freelancer])
+        .rpc(),
+      (error: any) => error?.error?.errorCode?.code === "InvalidStatus",
+    );
+
+    await assert.rejects(
+      program.methods
+        .approveMilestone(0)
+        .accounts({
+          escrow: fixture.escrow,
+          client: client.publicKey,
+          freelancer: fixture.freelancer.publicKey,
+          mint: fixture.mint,
+          vault: fixture.vault,
+          freelancerTokenAccount: getAssociatedTokenAddressSync(
+            fixture.mint,
+            fixture.freelancer.publicKey,
+          ),
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+      (error: any) => error?.error?.errorCode?.code === "InvalidStatus",
+    );
+
+    assert.equal((await getAccount(connection, fixture.vault)).amount, fixture.total);
+    await program.methods
+      .mutuallyRefund()
+      .accounts({
+        escrow: fixture.escrow,
+        client: client.publicKey,
+        freelancer: fixture.freelancer.publicKey,
+        mint: fixture.mint,
+        vault: fixture.vault,
+        clientTokenAccount: fixture.clientTokenAccount.address,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([fixture.freelancer])
+      .rpc();
+
+    const refundedState = await program.account.escrow.fetch(fixture.escrow);
+    assert.equal(refundedState.status.cancelled !== undefined, true);
     assert.equal((await getAccount(connection, fixture.clientTokenAccount.address)).amount, fixture.total);
   });
 });
