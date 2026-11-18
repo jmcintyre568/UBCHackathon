@@ -1,0 +1,13 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.devnet]
+trustlancer_escrow = "3pX5NKLru1UBDVckynWQxsgnJeUN3N1viy36Gk9TSn8d"
+
+[provider]
+cluster = "Devnet"
+wallet = "~/.config/solana/id.json"
+
+[workspace]
+members = ["programs/trustlancer_escrow"]
