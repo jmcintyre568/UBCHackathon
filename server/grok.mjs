@@ -1,10 +1,10 @@
-// Pluggable judge. Grok when XAI_API_KEY is set, otherwise the caller uses
-// the rules in logic.mjs. The rest of the app only sees checklist items and
-// a pass/fail verdict.
+// Grok, through the xAI API, writes checklists, judges deliverables, and
+// drafts the post that goes out when a hold releases. No key means the
+// caller uses the local fallback. The key is never logged.
 
 const ENDPOINT = "https://api.x.ai/v1/chat/completions";
 
-function parseJson(text) {
+export function parseModelJson(text) {
   const trimmed = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   try {
     return JSON.parse(trimmed);
@@ -20,10 +20,11 @@ export function grokConfigured() {
   return Boolean(process.env.XAI_API_KEY);
 }
 
-export async function grokJson(system, user) {
-  const key = process.env.XAI_API_KEY;
-  if (!key) return null;
-  const model = process.env.XAI_MODEL || "grok-3";
+function models() {
+  return [...new Set([process.env.XAI_MODEL, "grok-3", "grok-2-latest"].filter(Boolean))];
+}
+
+async function complete(model, system, user) {
   const body = {
     model,
     temperature: 0.2,
@@ -35,7 +36,7 @@ export async function grokJson(system, user) {
   const send = (payload) => fetch(ENDPOINT, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${key}`,
+      authorization: `Bearer ${process.env.XAI_API_KEY}`,
       "content-type": "application/json",
     },
     body: JSON.stringify(payload),
@@ -47,11 +48,27 @@ export async function grokJson(system, user) {
   }
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Grok ${response.status}: ${detail.slice(0, 180)}`);
+    const error = new Error(`Grok ${response.status}: ${detail.slice(0, 160)}`);
+    error.status = response.status;
+    throw error;
   }
   const payload = await response.json();
-  const content = payload.choices?.[0]?.message?.content;
-  return parseJson(content);
+  return parseModelJson(payload.choices?.[0]?.message?.content);
+}
+
+export async function grokJson(system, user) {
+  if (!grokConfigured()) return null;
+  let last = null;
+  for (const model of models()) {
+    try {
+      return await complete(model, system, user);
+    } catch (error) {
+      last = error;
+      console.warn(`[holler] grok ${model} (${error.message})`);
+      if (error.status === 401 || error.status === 403) break;
+    }
+  }
+  throw last || new Error("Grok did not answer");
 }
 
 const CHECKLIST_SYSTEM = `You write acceptance checklists for Holler, a consumer app where people pay a creator after the work is done.
@@ -68,7 +85,11 @@ Use the buyer's names, facts, length, and don'ts. Do not invent extra requiremen
 const JUDGE_SYSTEM = `You are the Holler escrow judge. Decide whether the deliverable satisfies every checklist line.
 Return JSON only:
 {"passed":boolean,"summary":string,"items":[{"id":string,"met":boolean,"reason":string}]}
-Use the checklist ids exactly. Reasons are one short sentence in plain speech. Do not mention that you are a model. Missing facts fail. A forbidden topic fails. passed is true only when every item is met.`;
+Use the checklist ids exactly. summary is one or two spoken sentences a person could hear out loud. Reasons are one short sentence in plain speech. Do not mention that you are a model. Missing facts fail. A forbidden topic fails. passed is true only when every item is met.`;
+
+const POST_SYSTEM = `You write the single X post a creator publishes when a paid request is finished.
+Return JSON only: {"text":string}
+Rules: under 220 characters, first person, say who it was for and that it was paid, no hashtags, no more than one exclamation mark, no seed phrases, no token tickers.`;
 
 export async function grokChecklist(brief, kind, creatorName) {
   const raw = await grokJson(CHECKLIST_SYSTEM, JSON.stringify({ creator: creatorName, kind, brief }));
@@ -100,4 +121,11 @@ export async function grokJudge(brief, items, deliverable) {
     items: results,
     engine: "grok",
   };
+}
+
+export async function draftAnnouncement(facts) {
+  const raw = await grokJson(POST_SYSTEM, JSON.stringify(facts));
+  const text = String(raw?.text || "").replace(/\s+/g, " ").trim();
+  if (text.length < 8) throw new Error("empty post");
+  return text.slice(0, 250);
 }

@@ -8,16 +8,25 @@ import { join } from "node:path";
 // each escrow step also lands as a memo signed by the demo fee payer, so a
 // buyer never holds SOL. PDAs use the program's real seeds.
 
-export const PROGRAM_ID = "DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS";
+export const PROGRAM_ID = "DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh";
+export const MAINNET_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 const LOCAL_PORT = 8901;
 
 let web3 = null;
 let connection = null;
-let payer = null;
 let mode = "demo";
 let ready = null;
 let validator = null;
+let live = false;
+
+export function getConnection() {
+  return connection;
+}
+
+export function programLive() {
+  return live;
+}
 
 async function loadWeb3() {
   if (web3) return web3;
@@ -25,11 +34,37 @@ async function loadWeb3() {
   return web3;
 }
 
-export function pubkeyFor(id) {
-  return loadWeb3().then(({ Keypair }) => {
-    const seed = createHash("sha256").update(`holler-user:${id}`).digest();
-    return Keypair.fromSeed(seed).publicKey.toBase58();
-  });
+export async function keypairFor(id) {
+  const { Keypair } = await loadWeb3();
+  const seed = createHash("sha256").update(`holler-user:${id}`).digest();
+  return Keypair.fromSeed(seed);
+}
+
+export async function pubkeyFor(id) {
+  const kp = await keypairFor(id);
+  return kp.publicKey.toBase58();
+}
+
+export async function feePayerKeypair() {
+  const { Keypair } = await loadWeb3();
+  if (process.env.FEE_PAYER_KEYPAIR) {
+    const { readFileSync } = await import("node:fs");
+    const raw = JSON.parse(readFileSync(process.env.FEE_PAYER_KEYPAIR, "utf8"));
+    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  }
+  const cluster = process.env.SOLANA_CLUSTER || "devnet";
+  if (cluster === "mainnet-beta" || cluster === "mainnet") {
+    throw new Error("Set FEE_PAYER_KEYPAIR for mainnet. The demo fee-payer seed is refused there.");
+  }
+  const seed = createHash("sha256").update("holler-fee-payer-v1").digest();
+  return Keypair.fromSeed(seed);
+}
+
+export function explorerUrl(signature, cluster = mode) {
+  if (!signature) return null;
+  if (cluster === "devnet") return `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+  if (cluster === "mainnet-beta" || cluster === "mainnet") return `https://explorer.solana.com/tx/${signature}`;
+  return null;
 }
 
 export async function deriveEscrow(clientPubkey, numericId) {
@@ -83,21 +118,24 @@ async function waitForHealth(url, tries = 40) {
 }
 
 async function connect(url) {
-  const { Connection, Keypair, LAMPORTS_PER_SOL } = await loadWeb3();
-  const seed = createHash("sha256").update("holler-fee-payer-v1").digest();
-  payer = Keypair.fromSeed(seed);
+  const { Connection, PublicKey, LAMPORTS_PER_SOL } = await loadWeb3();
+  const payer = await feePayerKeypair();
   connection = new Connection(url, "confirmed");
   mode = clusterOf(url);
-  const balance = await connection.getBalance(payer.publicKey);
-  if (balance < 0.2 * LAMPORTS_PER_SOL) {
-    try {
-      const sig = await connection.requestAirdrop(payer.publicKey, 2 * LAMPORTS_PER_SOL);
-      await connection.confirmTransaction(sig, "confirmed");
-    } catch (error) {
-      console.warn(`[holler] fee payer has no SOL (${error.message}). Memos will be skipped.`);
+  if (mode === "devnet") {
+    const balance = await connection.getBalance(payer.publicKey);
+    if (balance < 0.5 * LAMPORTS_PER_SOL) {
+      try {
+        const sig = await connection.requestAirdrop(payer.publicKey, 2 * LAMPORTS_PER_SOL);
+        await connection.confirmTransaction(sig, "confirmed");
+      } catch (error) {
+        console.warn(`[holler] devnet airdrop failed (${error.message}). Fund ${payer.publicKey.toBase58()}.`);
+      }
     }
   }
-  console.log(`[holler] chain ${mode} · fee payer ${payer.publicKey.toBase58()}`);
+  const info = await connection.getAccountInfo(new PublicKey(PROGRAM_ID));
+  live = Boolean(info?.executable);
+  console.log(`[holler] chain ${mode} · fee payer ${payer.publicKey.toBase58()} · program ${live ? "deployed" : "not deployed"}`);
 }
 
 export function chainMode() {
@@ -108,9 +146,15 @@ export async function ensureChain() {
   if (ready) return ready;
   ready = (async () => {
     if (process.env.HOLLER_SKIP_CHAIN === "1") return;
-    const url = process.env.SOLANA_RPC_URL;
+    const cluster = process.env.SOLANA_CLUSTER || "devnet";
+    const url = process.env.SOLANA_RPC_URL
+      || (cluster === "localnet"
+        ? `http://127.0.0.1:${LOCAL_PORT}`
+        : cluster === "mainnet-beta"
+          ? "https://api.mainnet-beta.solana.com"
+          : "https://api.devnet.solana.com");
     try {
-      if (url) {
+      if (cluster !== "localnet" || process.env.SOLANA_RPC_URL) {
         await connect(url);
         return;
       }
@@ -142,29 +186,8 @@ export async function ensureChain() {
   return ready;
 }
 
-export async function record(action, fields) {
-  await ensureChain();
-  if (!connection || !payer) return { cluster: "demo", signature: null };
-  try {
-    const { PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } = await loadWeb3();
-    const text = [
-      "holler",
-      action,
-      fields.escrow ? `escrow=${fields.escrow}` : "",
-      fields.cents != null ? `cents=${fields.cents}` : "",
-      fields.hash ? `hash=${String(fields.hash).slice(0, 16)}` : "",
-    ].filter(Boolean).join(" ").slice(0, 500);
-    const tx = new Transaction().add(new TransactionInstruction({
-      programId: new PublicKey(MEMO_PROGRAM_ID),
-      keys: [{ pubkey: payer.publicKey, isSigner: true, isWritable: false }],
-      data: Buffer.from(text),
-    }));
-    const signature = await sendAndConfirmTransaction(connection, tx, [payer], { commitment: "confirmed" });
-    return { cluster: mode, signature };
-  } catch (error) {
-    console.warn(`[holler] memo failed (${error.message})`);
-    return { cluster: "demo", signature: null };
-  }
+export async function record() {
+  return { cluster: mode, signature: null, explorer: null };
 }
 
 export function stopChain() {

@@ -1,8 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { announceMode, announceRelease } from "./announce.mjs";
-import { chainMode, deriveEscrow, PROGRAM_ID, pubkeyFor, record } from "./chain.mjs";
-import { grokChecklist, grokConfigured, grokJudge } from "./grok.mjs";
+import { chainMode, deriveEscrow, explorerUrl, PROGRAM_ID, programLive, pubkeyFor } from "./chain.mjs";
+import { onFreeze, onFund, onRefund, onRelease } from "./escrow.mjs";
+import { draftAnnouncement, grokChecklist, grokConfigured, grokJudge } from "./grok.mjs";
+import { parseAskMention } from "./mentions.mjs";
+import { parseStreamBody } from "./streams.mjs";
 import {
   captionLines,
   cardQuote,
@@ -15,7 +18,7 @@ import {
 } from "./logic.mjs";
 import { buildSeed } from "./seed.mjs";
 
-const VERSION = 1;
+const VERSION = 2;
 let state = null;
 
 function storeFile() {
@@ -89,8 +92,44 @@ export function engineStatus() {
     judge: grokConfigured() ? "grok" : "demo",
     chain: chainMode(),
     announce: announceMode(),
+    streams: (process.env.QUICKNODE_WEBHOOK_SECRET || /quiknode|quicknode/i.test(process.env.SOLANA_RPC_URL || "")) ? "quicknode" : "local",
     programId: PROGRAM_ID,
   };
+}
+
+function pushLive(event) {
+  const labels = { fund: "Hold opened", submit: "Work sent", release: "Released", freeze: "Frozen", refund: "Returned" };
+  state.live = state.live || [];
+  state.live.unshift({
+    ...event,
+    label: `${labels[event.action] || event.action}${event.cents ? ` · ${formatMoney(event.cents)}` : ""}`,
+  });
+  state.live = state.live.slice(0, 30);
+}
+
+async function note(action, fields) {
+  let chain = { cluster: "demo", signature: null, explorer: null };
+  try {
+    if (action === "fund") chain = await onFund(fields);
+    else if (action === "release") chain = await onRelease(fields);
+    else if (action === "refund") chain = await onRefund(fields);
+    else if (action === "freeze") chain = await onFreeze(fields);
+  } catch (error) {
+    if (programLive()) throw new Error(`The escrow transaction failed. ${error.message}`);
+    console.warn(`[holler] ${action} stayed on the demo ledger (${error.message})`);
+  }
+  const event = {
+    action,
+    at: Date.now(),
+    cluster: chain.cluster || chainMode(),
+    signature: chain.signature || null,
+    explorer: chain.explorer || null,
+    escrow: fields.escrowPda || null,
+    cents: fields.cents ?? null,
+    source: chain.signature ? "solana" : "ledger",
+  };
+  pushLive(event);
+  return event;
 }
 
 function activityFor(userId) {
@@ -117,12 +156,22 @@ function activityFor(userId) {
       });
     }
   }
+  for (const event of state.live || []) {
+    if (event.source !== "quicknode" || !event.escrow) continue;
+    const job = state.jobs.find((entry) => entry.escrow?.pda === event.escrow);
+    if (!job || (job.buyerId !== userId && job.creatorId !== userId)) continue;
+    items.push({
+      at: event.at,
+      href: `#/receipt/${job.id}`,
+      text: `${event.label} · QuickNode`,
+    });
+  }
   for (const note of state.announcements) {
     if (!note.userIds?.includes(userId)) continue;
     items.push({
       at: note.at,
       href: note.href || "#/",
-      text: note.delivered ? `Posted · ${note.text}` : `Draft for the bot · ${note.text}`,
+      text: `${note.delivered ? "Posted" : note.channel === "consent" ? "Not posted" : "Draft for the bot"} · ${note.text}`,
     });
   }
   return items.sort((a, b) => b.at - a.at).slice(0, 14);
@@ -144,6 +193,7 @@ export async function bootstrap(userId) {
     following: state.follows.filter((row) => row.followerId === me.id).map((row) => row.creatorId),
     likes: state.likes.filter((row) => row.userId === me.id).map((row) => row.postId),
     activity: activityFor(me.id),
+    live: (state.live || []).slice(0, 8),
     engine: engineStatus(),
   };
 }
@@ -200,11 +250,6 @@ export async function makeChecklist(userId, body) {
   return { ...result, amountCents: offer.priceCents, kind: offer.kind, title: offer.title, offerId: offer.id };
 }
 
-async function note(action, fields) {
-  const chain = await record(action, fields);
-  return { action, at: Date.now(), cluster: chain.cluster, signature: chain.signature };
-}
-
 export async function fundJob(userId, body) {
   await getState();
   const buyer = requireUser(userId);
@@ -251,7 +296,13 @@ export async function fundJob(userId, body) {
       vault: addresses.vault,
       client: buyer.wallet,
       freelancer: creator.wallet,
-      events: [await note("fund", { escrow: addresses.escrow, cents: offer.priceCents })],
+      events: [await note("fund", {
+        escrowId,
+        buyerId: buyer.id,
+        creatorId: creator.id,
+        cents: offer.priceCents,
+        escrowPda: addresses.escrow,
+      })],
     },
   };
   state.jobs.unshift(job);
@@ -265,7 +316,10 @@ export async function sampleJob(userId, jobId, mode) {
   const job = jobById(jobId);
   if (me.id !== job.creatorId) throw new Error("Only the creator fills this in.");
   const creator = userById(job.creatorId);
-  return sampleFor(job.items, mode === "fail" ? "fail" : "pass", { kind: job.kind, creatorName: creator.name });
+  return sampleFor(job.items, mode === "fail" ? "fail" : "pass", {
+    kind: job.kind === "shoutout" ? "shoutout" : "work",
+    creatorName: creator.name,
+  });
 }
 
 async function judgeJob(job, text) {
@@ -305,11 +359,21 @@ async function releaseJob(job) {
   job.escrow.status = "completed";
   job.escrow.releasedCents = job.amountCents;
   job.escrow.hash = job.deliverable?.hash || null;
-  job.escrow.events.push(await note("release", {
-    escrow: job.escrow.pda,
-    cents: job.amountCents,
+  const releaseEvent = await note("release", {
+    escrowId: job.escrow.id,
+    buyerId: job.buyerId,
+    creatorId: job.creatorId,
     hash: job.escrow.hash,
-  }));
+    cents: job.amountCents,
+    escrowPda: job.escrow.pda,
+  });
+  const submitEvent = [...job.escrow.events].reverse().find((event) => event.action === "submit");
+  if (submitEvent && releaseEvent.signature) {
+    submitEvent.signature = releaseEvent.signature;
+    submitEvent.explorer = releaseEvent.explorer;
+    submitEvent.cluster = releaseEvent.cluster;
+  }
+  job.escrow.events.push(releaseEvent);
   job.status = "released";
   job.releasedAt = Date.now();
   if (!job.counted) {
@@ -321,16 +385,31 @@ async function releaseJob(job) {
   await publish(job);
   const creator = userById(job.creatorId);
   const buyer = userById(job.buyerId);
-  const text = `${creator.name} finished “${job.title}” for ${buyer.name}. ${formatMoney(job.amountCents)} released.`;
-  const result = await announceRelease({
-    event: "escrow.released",
-    text,
-    programId: PROGRAM_ID,
-    escrowPda: job.escrow.pda,
-    signature: job.escrow.events.at(-1)?.signature || null,
-    amountCents: job.amountCents,
-    checklistPassed: true,
-  });
+  let text = `${creator.name} finished “${job.title}” for ${buyer.name}. ${formatMoney(job.amountCents)} released.`;
+  if (creator.announce && grokConfigured()) {
+    try {
+      text = await draftAnnouncement({
+        creator: creator.name,
+        buyer: buyer.name,
+        title: job.title,
+        amount: formatMoney(job.amountCents),
+        kind: job.kind,
+      });
+    } catch (error) {
+      console.warn(`[holler] post draft fallback (${error.message})`);
+    }
+  }
+  const result = creator.announce
+    ? await announceRelease({
+      event: "escrow.released",
+      text,
+      programId: PROGRAM_ID,
+      escrowPda: job.escrow.pda,
+      signature: job.escrow.events.at(-1)?.signature || null,
+      amountCents: job.amountCents,
+      checklistPassed: true,
+    })
+    : { text, channel: "consent", delivered: false };
   state.announcements.unshift({
     id: `a${job.escrow.id}`,
     at: Date.now(),
@@ -356,11 +435,90 @@ export async function submitJob(userId, jobId, body) {
   verdict.at = Date.now();
   job.deliverable = { text, link, hash: deliverableHash(packed), at: Date.now() };
   job.verdict = verdict;
-  job.escrow.events.push(await note("submit", { escrow: job.escrow.pda, hash: job.deliverable.hash }));
-  if (verdict.passed) await releaseJob(job);
-  else job.status = "flagged";
+  job.escrow.events.push({
+    action: "submit",
+    at: Date.now(),
+    cluster: chainMode(),
+    signature: null,
+    explorer: null,
+    escrow: job.escrow.pda,
+    source: "ledger",
+  });
+  if (verdict.passed) {
+    try {
+      await releaseJob(job);
+    } catch (error) {
+      job.verdict = null;
+      job.deliverable = null;
+      job.escrow.events = job.escrow.events.filter((event) => event.action !== "submit");
+      throw error;
+    }
+  } else job.status = "flagged";
   save();
   return job;
+}
+
+export async function setAnnounce(userId, on) {
+  await getState();
+  const me = requireUser(userId);
+  me.announce = Boolean(on);
+  save();
+  return { announce: me.announce };
+}
+
+export async function askFromMention({ text, authorHandle, tweetId }) {
+  await getState();
+  state.mentions = state.mentions || [];
+  if (tweetId && state.mentions.includes(tweetId)) return null;
+  const parsed = parseAskMention(text);
+  if (!parsed) throw new Error("Say who you want, like @leo, and what you want.");
+  const creator = state.users.find((user) => user.handle === parsed.creatorHandle && user.offers?.length);
+  if (!creator) throw new Error(`Nobody here goes by @${parsed.creatorHandle}.`);
+  const author = String(authorHandle || "").replace(/^@/, "").toLowerCase();
+  let buyer = state.users.find((user) => user.handle === author) || userById("maya");
+  if (buyer.id === creator.id) buyer = userById("maya");
+  const offer = creator.offers[0];
+  const job = await fundJob(buyer.id, { creatorId: creator.id, offerId: offer.id, brief: parsed.brief });
+  job.source = "x";
+  if (tweetId) state.mentions.push(tweetId);
+  save();
+  return job;
+}
+
+export async function ingestStream(body) {
+  await getState();
+  const events = parseStreamBody(body);
+  let added = 0;
+  for (const event of events) {
+    const key = `${event.action}:${event.signature || event.escrow || ""}`;
+    if ((state.live || []).some((row) => row.source === "quicknode" && `${row.action}:${row.signature || row.escrow || ""}` === key)) continue;
+    const job = state.jobs.find((entry) => event.escrow && entry.escrow?.pda === event.escrow);
+    if (job) {
+      const row = [...job.escrow.events].reverse().find((entry) => entry.action === event.action);
+      if (row) {
+        if (event.signature && !row.signature) {
+          row.signature = event.signature;
+          row.explorer = explorerUrl(event.signature, "devnet");
+          row.cluster = "devnet";
+        }
+        row.stream = "quicknode";
+      }
+      job.escrow.stream = "quicknode";
+    }
+    pushLive({
+      action: event.action,
+      at: Date.now(),
+      cluster: chainMode(),
+      signature: event.signature || null,
+      explorer: event.signature ? explorerUrl(event.signature, chainMode()) : null,
+      escrow: event.escrow,
+      cents: event.cents,
+      source: "quicknode",
+    });
+    added += 1;
+  }
+  save();
+  return { added };
 }
 
 export async function releaseAnyway(userId, jobId) {
@@ -392,7 +550,13 @@ async function finishRefund(job) {
   if (!["active", "disputed"].includes(job.escrow.status)) throw new Error("This hold can't be returned.");
   job.escrow.status = "cancelled";
   job.status = "refunded";
-  job.escrow.events.push(await note("refund", { escrow: job.escrow.pda, cents: job.amountCents }));
+  job.escrow.events.push(await note("refund", {
+    escrowId: job.escrow.id,
+    buyerId: job.buyerId,
+    creatorId: job.creatorId,
+    cents: job.amountCents,
+    escrowPda: job.escrow.pda,
+  }));
 }
 
 export async function requestRefund(userId, jobId) {
@@ -417,7 +581,13 @@ export async function freezeJob(userId, jobId) {
   if (job.escrow.status !== "active") throw new Error("This hold is already frozen or settled.");
   job.escrow.status = "disputed";
   job.status = "disputed";
-  job.escrow.events.push(await note("freeze", { escrow: job.escrow.pda, cents: job.amountCents }));
+  job.escrow.events.push(await note("freeze", {
+    escrowId: job.escrow.id,
+    buyerId: job.buyerId,
+    actorId: me.id,
+    cents: job.amountCents,
+    escrowPda: job.escrow.pda,
+  }));
   save();
   return job;
 }

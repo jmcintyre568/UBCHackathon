@@ -3,17 +3,22 @@ import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureChain, stopChain } from "./chain.mjs";
+import { hookAuthorized } from "./streams.mjs";
+import { startMentionPoll } from "./mentions.mjs";
 import {
+  askFromMention,
   bootstrap,
   engineStatus,
   freezeJob,
   fundJob,
+  ingestStream,
   makeChecklist,
   releaseAnyway,
   requestRefund,
   resetState,
   retryJob,
   sampleJob,
+  setAnnounce,
   submitJob,
   toggleFollow,
   toggleLike,
@@ -34,16 +39,21 @@ function send(res, code, body, type = "application/json; charset=utf-8") {
   res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-async function readJson(req) {
+async function readJson(req, limit = 100_000) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 100_000) throw new Error("That request is too large.");
+    if (size > limit) throw new Error("That request is too large.");
     chunks.push(chunk);
   }
   if (!size) return {};
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function hookOk(req) {
+  const header = req.headers["x-holler-secret"] || String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  return hookAuthorized(header);
 }
 
 function userId(req) {
@@ -66,7 +76,21 @@ async function handleApi(req, res, url) {
     send(res, 200, { ok: true });
     return;
   }
+  if (req.method === "POST" && (path === "/api/hooks/quicknode" || path === "/api/hooks/x")) {
+    if (!hookOk(req)) {
+      send(res, 401, { error: "Bad hook secret." });
+      return;
+    }
+    const hookBody = await readJson(req, 2_000_000);
+    if (path === "/api/hooks/quicknode") send(res, 200, await ingestStream(hookBody));
+    else send(res, 200, { job: await askFromMention(hookBody) });
+    return;
+  }
   const body = req.method === "POST" ? await readJson(req) : {};
+  if (req.method === "POST" && path === "/api/me/announce") {
+    send(res, 200, await setAnnounce(me, body.on));
+    return;
+  }
   if (req.method === "POST" && path === "/api/follow") {
     send(res, 200, await toggleFollow(me, body.creatorId));
     return;
@@ -143,7 +167,15 @@ if (isMain) {
   const shown = server.address();
   console.log(`holler → http://localhost:${shown.port}`);
   const engine = engineStatus();
-  console.log(`judge: ${engine.judge === "grok" ? "Grok" : "demo judge"} · ledger: ${engine.chain} · announcements: ${engine.announce}`);
+  console.log(`judge: ${engine.judge} · ledger: ${engine.chain} · streams: ${engine.streams} · announcements: ${engine.announce}`);
+  startMentionPoll(async (mention) => {
+    try {
+      const job = await askFromMention(mention);
+      if (job) console.log(`[holler] x ask ${job.id} for @${job.creatorId}`);
+    } catch (error) {
+      console.warn(`[holler] x ask (${error.message})`);
+    }
+  });
   const shutdown = () => {
     stopChain();
     server.close(() => process.exit(0));

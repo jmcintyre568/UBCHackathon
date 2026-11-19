@@ -11,15 +11,15 @@ npm install
 npm start
 ```
 
-Open http://localhost:5173. The first screen is a phone. You're Maya. No wallet install, no seed phrase.
+Open http://localhost:5173. The first screen is a phone. You're Maya. No wallet install, no seed phrase. Each person has an embedded wallet the server holds, and the app pays the network fee.
 
-If the Solana CLI is installed, the server starts a local validator and writes a memo for each hold, delivery, release, freeze, and refund. The app pays that fee. Set `HOLLER_SKIP_CHAIN=1` to stay on the in-process ledger, or `SOLANA_RPC_URL` to use a validator you already have.
+By default the app uses Solana devnet. After `scripts/deploy-devnet.sh`, hold, submit, release, and refund are transactions on the escrow program, and the receipt links to the explorer. Without that deploy, the same screens run on an in-process ledger. `SETUP.md` is the list of accounts and keys for Grok, X, and QuickNode.
 
 ```sh
 npm run test:app
 ```
 
-That checks the checklist, the judge, and the full hold → deliver → release path.
+That checks the checklist, the judge, a hold through release and refund, an X mention, and a QuickNode event.
 
 ## Two-minute demo
 
@@ -27,14 +27,20 @@ That checks the checklist, the judge, and the full hold → deliver → release 
 2. Leave the birthday note as it is and tap **Write the checklist**. Priya, nursing school, the length, and the "don't joke about her being late" line should all be there. Remove or add a line if you want.
 3. Tap **Hold $28**. The dollars sit in escrow.
 4. Tap **Continue** to use the phone as Leo. **Fill a take that passes**, then **Send it**.
-5. The checklist turns green and the $28 releases. Open the receipt. The escrow address is the program's real PDA. If a local validator is running, the note is a Solana signature.
-6. Do it once more with **Fill a take that misses**. The money stays held. Maya can pay anyway, or both people can send it back.
+5. The checklist turns green and the $28 releases. Open the receipt. **View on explorer** opens the devnet transaction once the program is deployed.
+6. Do it once more with **Fill a take that misses**. The money stays held. Maya can pay anyway, or both people can send it back. On You, as Leo, posting to X is a toggle. It stays a draft until the X keys are set.
 
 Switch people from the face at the top left. Priya, Noah, and Eden are there too. Eden's **Northroom** board is the light studio view: a manager assigning the same kind of hold.
 
-## The judge
+## The judge and X
 
-Set `XAI_API_KEY` and the checklist and the verdict both come from Grok (`XAI_MODEL`, default `grok-3`) through the xAI API. The module is `server/grok.mjs`. If the key is missing, or Grok doesn't answer, `server/logic.mjs` is the demo judge: it pulls names, lengths, and don'ts out of the buyer's own words and scores the deliverable against them. The screen says which one checked the work.
+Set `XAI_API_KEY` and the checklist, the verdict, and the release post come from Grok (`XAI_MODEL`, default `grok-3`). If the key is missing, or Grok doesn't answer, `server/logic.mjs` is the demo judge. The screen says which one checked the work.
+
+A creator opts in on the You page. With the four X user tokens set, that post is published. A mention of `@holler ask @leo ...` becomes a funded ask when `X_BEARER_TOKEN` is set, or when something POSTs the mention to `/api/hooks/x`.
+
+## QuickNode
+
+Point `SOLANA_RPC_URL` at a QuickNode devnet endpoint and stream matching transactions to `/api/hooks/quicknode`. The filter is `quicknode/filter.js`. Those deliveries update the home strip, the activity bell, and the receipt. The setup steps are in `SETUP.md`.
 
 ## Escrow
 
@@ -49,17 +55,7 @@ Set `XAI_API_KEY` and the checklist and the verdict both come from Grok (`XAI_MO
 
 A failed checklist does not submit on-chain. The creator can try again while the funds stay in the active escrow. The account shown on the receipt is derived with the program's seeds: `["escrow", buyer, id]`.
 
-The program id is `DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS`. It is a development program, not audited, and not for real funds. `npm test` builds it and runs the Anchor tests when the Solana and Anchor CLIs are installed. That suite does not run as part of `npm start`.
-
-## Announcements
-
-When a hold releases, Holler drafts a one-line note. It is not sent unless you configure it.
-
-- `GROK_BOT_WEBHOOK_URL` receives a JSON payload (`escrow.released`, amount, program id, escrow address, signature) so a Grok bot can post or do something with the on-chain event.
-- `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCESS_SECRET` post the line to X.
-- `HOLLER_ANNOUNCE=off` keeps it quiet even if those are set.
-
-The draft shows in the activity bell either way.
+The program id is `DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh`. It is a development program, not audited, and not for real funds. `npm test` builds it and runs the Anchor tests when the Solana and Anchor CLIs are installed. That suite does not run as part of `npm start`. Mainnet needs a new program key, a real fee-payer keypair, and the official USDC mint. `SETUP.md` has those steps. The demo seed is refused when `SOLANA_CLUSTER=mainnet-beta`.
 
 ## Money, in plain terms
 

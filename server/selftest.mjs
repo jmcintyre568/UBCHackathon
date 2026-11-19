@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it, after } from "node:test";
+import { centsToBase, encodeForTest } from "./escrow.mjs";
 import { checklistFromBrief, evaluate, sampleFor } from "./logic.mjs";
+import { parseAskMention } from "./mentions.mjs";
+import { hookAuthorized, parseStreamBody } from "./streams.mjs";
 
 process.env.HOLLER_SKIP_CHAIN = "1";
 process.env.HOLLER_STORE = "memory";
@@ -58,6 +61,34 @@ describe("checklist", () => {
 });
 
 let base;
+
+describe("integrations", () => {
+  it("prices a dollar as USDC base units and builds escrow instruction bytes", () => {
+    assert.equal(centsToBase(2800), 28_000_000n);
+    const encoded = encodeForTest();
+    assert.equal(encoded.fund, 8);
+    assert.equal(encoded.create, 36);
+  });
+
+  it("reads an X ask and a QuickNode memo", () => {
+    const ask = parseAskMention("@holler ask @leo a 20 second birthday shoutout for Priya");
+    assert.equal(ask.creatorHandle, "leo");
+    assert.match(ask.brief, /priya/i);
+    const events = parseStreamBody({
+      logs: ["Program log: holler release escrow=A26LSeed111111111111111111111111111 cents=2800"],
+    });
+    assert.equal(events.length, 1);
+    assert.equal(events[0].action, "release");
+    assert.equal(events[0].cents, 2800);
+    assert.equal(events[0].source, "quicknode");
+    const previous = process.env.HOLLER_HOOK_SECRET;
+    process.env.HOLLER_HOOK_SECRET = "s3cret";
+    assert.equal(hookAuthorized("s3cret"), true);
+    assert.equal(hookAuthorized("nope"), false);
+    if (previous == null) delete process.env.HOLLER_HOOK_SECRET;
+    else process.env.HOLLER_HOOK_SECRET = previous;
+  });
+});
 
 describe("app", () => {
   let server;
@@ -144,6 +175,30 @@ describe("app", () => {
     assert.equal(refunded.status, "refunded");
     assert.equal(refunded.escrow.status, "cancelled");
 
+    const mayaAfter = await api("/api/bootstrap");
+    assert.ok(mayaAfter.activity.some((item) => /Draft for the bot/i.test(item.text)));
+    const priyaAfter = await api("/api/bootstrap", { user: "priya" });
+    assert.equal(priyaAfter.me.announce, false);
+    assert.ok(priyaAfter.activity.some((item) => /Not posted/i.test(item.text)));
+
+    const fromX = await api("/api/hooks/x", {
+      method: "POST",
+      body: { text: "@holler ask @leo a 20 second birthday shoutout for Priya", authorHandle: "maya" },
+    });
+    assert.equal(fromX.job.creatorId, "leo");
+    assert.equal(fromX.job.source, "x");
+    assert.equal(fromX.job.status, "funded");
+
+    const stream = await api("/api/hooks/quicknode", {
+      method: "POST",
+      body: { logs: [`holler release escrow=${paid.escrow.pda} cents=2800`] },
+    });
+    assert.equal(stream.added, 1);
+    const streamed = await api("/api/bootstrap");
+    assert.ok(streamed.live.some((item) => item.source === "quicknode" && item.action === "release"));
+    const stamped = streamed.jobs.find((job) => job.id === paid.id);
+    assert.equal(stamped.escrow.events.some((event) => event.stream === "quicknode"), true);
+
     const followed = await api("/api/follow", { method: "POST", body: { creatorId: "sable" } });
     assert.equal(followed.following, true);
     const unfollowed = await api("/api/follow", { method: "POST", body: { creatorId: "sable" } });
@@ -161,6 +216,7 @@ async function api(path, options = {}) {
     headers: {
       "content-type": "application/json",
       "x-holler-user": options.user || "maya",
+      ...(options.headers || {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });

@@ -66,7 +66,7 @@ function route() {
   if (!parts.length) return { name: "feed" };
   if (name === "u") return { name: "profile", id: parts[1] };
   if (!known.includes(name)) return { name: "feed" };
-  return { name, id: parts[1] };
+  return { name, id: parts[1], offer: parts[2] };
 }
 
 function needsYou(job, me = db.me) {
@@ -193,9 +193,16 @@ function clip(post) {
   return `<a class="clip" href="#/post/${post.id}" style="--h:${creator.hue}"><span class="play icon-play">${icon("play")}</span><blockquote>${esc(post.quote)}</blockquote><div class="card-foot">${foot}</div></a>`;
 }
 
+function liveStrip() {
+  const item = (db.live || [])[0];
+  if (!item) return "";
+  const where = item.source === "quicknode" ? "QuickNode" : item.signature ? "Solana" : "Ledger";
+  return `<p class="live"><i></i>${esc(item.label)} <small>${esc(where)}</small></p>`;
+}
+
 function renderFeed() {
   return frame({
-    body: `<h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p><div class="stories">${stories()}</div>${banner()}<div class="feed">${db.posts.map(clip).join("")}</div>`,
+    body: `<h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p>${liveStrip()}<div class="stories">${stories()}</div>${banner()}<div class="feed">${db.posts.map(clip).join("")}</div>`,
   });
 }
 
@@ -245,9 +252,10 @@ function renderProfile(id) {
   });
 }
 
-function ensureAsk(creator) {
-  if (!local.ask || local.ask.creatorId !== creator.id) {
-    const offer = creator.offers[0];
+function ensureAsk(creator, offerId) {
+  const picked = creator.offers.find((entry) => entry.id === offerId);
+  if (!local.ask || local.ask.creatorId !== creator.id || (picked && local.ask.offerId !== picked.id && !local.ask.dirty && !local.ask.items)) {
+    const offer = picked || creator.offers[0];
     local.ask = {
       creatorId: creator.id,
       offerId: offer.id,
@@ -267,7 +275,7 @@ function ensureAsk(creator) {
 function renderAsk(id) {
   const creator = person(id);
   if (!creator?.offers?.length) return frame({ back: "#/people", title: "Ask", body: `<p class="empty">They aren't taking asks.</p>`, tabs: false });
-  const draft = ensureAsk(creator);
+  const draft = ensureAsk(creator, route().offer);
   const offer = creator.offers.find((entry) => entry.id === draft.offerId) || creator.offers[0];
   const checks = draft.items ? `<div id="checks"><p class="kicker">${draft.engine === "grok" ? "Written by Grok" : "Demo judge"}</p><p class="fine">These lines release the money.</p>${draft.items.map((item) => `<div class="check"><span><b>${esc(item.text)}</b></span><button class="x" type="button" data-act="drop" data-id="${esc(item.id)}" aria-label="Remove line">×</button></div>`).join("")}<form class="add-line" id="add-line"><input name="line" type="text" placeholder="Add a line" aria-label="Add a checklist line" /><button class="btn" type="submit">Add</button></form></div>` : "";
   const dock = draft.items ? `<div class="dock"><div><small>${esc(offer.title)}</small><b>${money(offer.priceCents)}</b></div><button class="btn primary" type="button" data-act="hold" ${draft.busy || draft.items.length < 2 ? "disabled" : ""}>${draft.busy ? "Holding…" : `Hold ${money(offer.priceCents)}`}</button></div>` : "";
@@ -409,7 +417,8 @@ function renderReceipt(id) {
       <section class="panel"><p class="kicker">Program</p><p>trustlancer escrow</p><div class="copyline"><code>${esc(shortKey(db.engine.programId))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(db.engine.programId)}">Copy</button></div>
         <p class="kicker">Escrow account</p><div class="copyline"><code>${esc(shortKey(job.escrow.pda))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(job.escrow.pda)}">Copy</button></div>
         ${job.escrow.hash ? `<p class="kicker">Deliverable</p><div class="copyline"><code>${esc(shortKey(job.escrow.hash))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(job.escrow.hash)}">Copy</button></div>` : ""}
-        <p class="kicker">Note</p>${sig ? `<div class="copyline"><code>${esc(shortKey(sig))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(sig)}">Copy</button></div>${cluster === "devnet" ? `<a href="https://explorer.solana.com/tx/${sig}?cluster=devnet">View on Solana</a>` : `<p class="fine">Signed by the app's fee payer. You don't hold SOL for this.</p>`}` : `<p class="fine">No network broadcast yet. The hold still follows the program, and the account above is the real address for this buyer and id.</p>`}
+        <p class="kicker">Transaction</p>${sig ? `<div class="copyline"><code>${esc(shortKey(sig))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(sig)}">Copy</button></div>${signed.explorer ? `<a class="btn primary block" href="${esc(signed.explorer)}" target="_blank" rel="noreferrer">View on explorer</a>` : `<p class="fine">Signed by the app's fee payer. You don't hold SOL for this.</p>`}` : `<p class="fine">No network broadcast yet. The hold still follows the program, and the account above is the real address for this buyer and id.</p>`}
+        ${job.escrow.stream === "quicknode" || job.escrow.events.some((event) => event.stream === "quicknode") ? `<p class="fine">QuickNode reported this.</p>` : ""}
       </section>
       <ol class="trace">${steps.map(([action, name, ix]) => `<li class="${done.has(action) ? "on" : ""}">${name}<span>${ix}</span></li>`).join("")}</ol>
       <p class="fine">Dollars on screen are USDC. Fees are paid by Holler.</p>`,
@@ -441,7 +450,8 @@ function renderYou() {
       ${creator ? `<div class="hero-money">${money(db.me.earnedCents)}</div><p class="lede">${db.me.jobs} jobs on the record · ${db.me.onTime}% on time</p><section class="panel"><p class="kicker">Portable record</p><p>Completed jobs stay with this account.</p><button class="btn ghost" type="button" data-act="copy-record">Copy record</button></section>` : `<p class="kicker">Following</p>${following.map((who) => `<a class="person" href="#/u/${who.id}">${avatar(who, "sm")}<span><b>${esc(who.name)}</b><small>${esc(who.offers[0]?.title || "")}</small></span></a>`).join("") || `<p class="empty">Follow someone from People.</p>`}`}
       ${db.me.studio ? `<a class="job" href="#/studio"><b>Northroom</b><small>The studio board</small></a>` : ""}
       <a class="job" href="#/how"><b>How the money works</b><small>Plain version</small></a>
-      <section class="panel"><p class="kicker">Demo</p><button class="btn ghost block" type="button" data-act="who">Switch person</button><button class="btn ghost block" type="button" data-act="reset" style="margin-top:8px">Reset demo data</button><p class="fine">Judge · ${esc(judge)}<br>Ledger · ${esc(chain)}<br>Announcements · ${esc(db.engine.announce)}</p></section>`,
+      ${creator ? `<section class="panel"><p class="kicker">On X</p><button class="btn ghost block" type="button" data-act="announce" data-on="${db.me.announce ? "0" : "1"}">${db.me.announce ? "Posting finished asks" : "Finished asks stay private"}</button><p class="fine">Grok drafts the post. It only goes out if this is on and the X keys are set.</p></section>` : ""}
+      <section class="panel"><p class="kicker">Demo</p><button class="btn ghost block" type="button" data-act="who">Switch person</button><button class="btn ghost block" type="button" data-act="reset" style="margin-top:8px">Reset demo data</button><p class="fine">Judge · ${esc(judge)}<br>Ledger · ${esc(chain)}<br>Streams · ${esc(db.engine.streams)}<br>Announcements · ${esc(db.engine.announce)}</p></section>`,
   });
 }
 
@@ -711,6 +721,13 @@ async function onClick(event) {
     if (act === "play") {
       const post = db.posts.find((entry) => entry.id === el.dataset.id);
       play(post);
+      return;
+    }
+    if (act === "announce") {
+      const res = await api("/api/me/announce", { method: "POST", body: { on: el.dataset.on === "1" } });
+      db.me.announce = res.announce;
+      draw();
+      toast(res.announce ? "Finished asks can post on X." : "Finished asks stay off X.");
       return;
     }
     if (act === "copy") {

@@ -317,7 +317,14 @@ function openJob({ id, buyerId, creatorId, offerId, brief, at, studio = false, a
   };
 }
 
+const POST_ON_X = new Set(["leo", "amina"]);
+
+function applyAnnouncements() {
+  for (const person of PEOPLE) person.announce = POST_ON_X.has(person.id);
+}
+
 export async function buildSeed() {
+  applyAnnouncements();
   const now = Date.now();
   const wallets = Object.fromEntries(await Promise.all(PEOPLE.map(async (entry) => [entry.id, await pubkeyFor(entry.id)])));
   const users = PEOPLE.map((entry) => {
@@ -521,12 +528,14 @@ export async function buildSeed() {
   ].map(([postId, userId]) => ({ postId, userId }));
 
   return {
-    version: 1,
+    version: 2,
     users,
     follows,
     likes,
     jobs,
     posts,
     announcements: [],
+    live: [],
+    mentions: [],
   };
 }

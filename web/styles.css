@@ -56,7 +56,7 @@ a { color: inherit; }
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 4px 16px 32px;
+  padding: 4px 16px 64px;
   scrollbar-width: none;
 }
 .view::-webkit-scrollbar { display: none; }
@@ -162,6 +162,10 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   margin: 6px 0 4px;
 }
 .lede { margin: 0 0 16px; color: var(--muted); font-size: 16px; }
+.kicker.on-card { position: absolute; top: 18px; right: 16px; z-index: 1; color: var(--lime); }
+.live { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); display: block; }
+.live small { margin-left: auto; color: var(--faint); }
 .kicker {
   margin: 0 0 6px;
   color: var(--faint);

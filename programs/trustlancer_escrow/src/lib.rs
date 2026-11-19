@@ -3,7 +3,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 
 // Keep this address synchronized with Anchor.toml and the program keypair.
-declare_id!("DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS");
+declare_id!("DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh");
 
 const MAX_MILESTONES: usize = 8;
 
