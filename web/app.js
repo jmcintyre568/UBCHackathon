@@ -210,7 +210,7 @@ function badges(who) {
 
 function renderFeed() {
   return frame({
-    body: `<h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p>${liveStrip()}<div class="stories">${stories()}</div>${banner()}<div class="feed">${db.posts.map(clip).join("")}</div>`,
+    body: `<div class="home"><h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p><a class="home-cta" href="#/people">Find someone</a>${liveStrip()}<div class="stories">${stories()}</div>${banner()}<div class="feed">${db.posts.map(clip).join("")}</div></div>`,
   });
 }
 
