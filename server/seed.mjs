@@ -44,7 +44,7 @@ const PEOPLE = [
         title: "Birthday shoutout",
         priceCents: 2800,
         eta: "Usually today",
-        prompt: "A 20 second birthday shoutout for my sister Priya. She just finished nursing school. Keep it warm. Please don't joke about her always being late.",
+        prompt: "A 30 second birthday shoutout for Sam. Say her name, mention UT, and end with a cheer.",
       },
       {
         id: "pep",
@@ -61,7 +61,7 @@ const PEOPLE = [
     name: "Amina Diallo",
     handle: "amina",
     city: "London",
-    bio: "Twenty-second songs made for one person.",
+    bio: "Event photos and short songs, shot for one room.",
     hue: 265,
     part: "On camera",
     cast: false,
@@ -73,12 +73,20 @@ const PEOPLE = [
     tags: ["music", "jingle"],
     offers: [
       {
+        id: "photos",
+        kind: "work",
+        title: "Event photos",
+        priceCents: 6000,
+        eta: "A few days",
+        prompt: "Shoot 15 photos at the Longhorn Hack Night. Need a wide crowd shot, 3 speaker close-ups, and the sponsor banner visible.",
+      },
+      {
         id: "jingle",
         kind: "shoutout",
         title: "A jingle",
         priceCents: 7500,
         eta: "A few days",
-        prompt: "A 20 second jingle for my bakery, Hearth. Mention rye bread and that we're open in the evening. Keep it warm.",
+        prompt: "A 20 second jingle for Hearth bakery. Mention rye bread and that we're open in the evening. Keep it warm.",
       },
     ],
   },
@@ -156,7 +164,7 @@ const PEOPLE = [
         title: "Form check",
         priceCents: 3200,
         eta: "Usually today",
-        prompt: "A form check for my squat. My name is Maya. Tell me about my knees and to slow the way up. Keep it honest.",
+        prompt: "A form-check video on my squat. Give me 3 fixes with timestamps. My name is Maya. Keep it honest.",
       },
     ],
   },
@@ -210,6 +218,14 @@ const PEOPLE = [
         eta: "Usually today",
         prompt: "A 30 second pep talk before my interview at Northroom. My name is Maya. Tell me to talk about the project. Keep it serious.",
       },
+      {
+        id: "logo",
+        kind: "work",
+        title: "Logo",
+        priceCents: 14000,
+        eta: "This week",
+        prompt: "A logo for Northroom Coffee. 3 colors max, SVG and PNG, and it has to work on a dark background.",
+      },
     ],
   },
   {
@@ -261,11 +277,11 @@ function person(id) {
   return PEOPLE.find((entry) => entry.id === id);
 }
 
-function releasedJob({ id, buyerId, creatorId, offerId, brief, text, quote, at, studio = false }) {
+function releasedJob({ id, buyerId, creatorId, offerId, brief, text, quote, at, studio = false, items, amountCents, title }) {
   const creator = person(creatorId);
   const offer = creator.offers.find((entry) => entry.id === offerId) || creator.offers[0];
-  const items = checklistFromBrief(brief, offer.kind);
-  const verdict = evaluate(items, text);
+  const checklist = items || checklistFromBrief(brief, offer.kind);
+  const verdict = evaluate(checklist, text);
   verdict.at = at + HOUR;
   return {
     id: `j${id}`,
@@ -273,10 +289,10 @@ function releasedJob({ id, buyerId, creatorId, offerId, brief, text, quote, at, 
     creatorId,
     offerId: offer.id,
     kind: offer.kind,
-    title: offer.title,
+    title: title || offer.title,
     brief,
-    items,
-    amountCents: offer.priceCents,
+    items: checklist,
+    amountCents: amountCents || offer.priceCents,
     status: verdict.passed ? "released" : "flagged",
     deliverable: { text, link: "", hash: deliverableHash(text), at: at + HOUR },
     verdict,
@@ -358,24 +374,39 @@ export async function buildSeed() {
     user.audienceBase = Math.max(0, user.audienceBase - real);
   }
 
+  const line = (id, text, type, terms = [], seconds) => ({
+    id, text, required: true, rule: { type, terms, seconds },
+  });
   const specs = [
     releasedJob({
       id: 1001,
       buyerId: "maya",
       creatorId: "leo",
       offerId: "birthday",
-      at: now - 6 * HOUR,
-      quote: "She said yes. Tell her the good part twice.",
-      brief: "A 20 second shoutout for my friend Sam. She said yes. Tell her the good part twice. Keep it warm.",
-      text: "She said yes. Tell her the good part twice. Sam, this is for you, my friend. The cut is 20 seconds long. I am speaking on camera, straight to you, and I kept it warm.",
+      at: now - 2 * HOUR,
+      brief: "A 30 second birthday shoutout for Sam. Say her name, mention UT, and end with a cheer.",
+      items: [
+        line("c1", "Say her name", "include", ["sam"]),
+        line("c2", "Mention UT", "include", ["texas"]),
+        line("c3", "End with a cheer", "include", ["cheer"]),
+      ],
+      text: "Sam, happy birthday. This one mentions Texas and I end with a cheer. I am speaking on camera, straight to you.",
     }),
-    openJob({
+    releasedJob({
       id: 1002,
       buyerId: "maya",
       creatorId: "priya",
       offerId: "edit",
       at: now - 5 * HOUR,
-      brief: "Edit a 30 second recap of my sister Priya's graduation. Keep her speech, remove the wind noise, and put captions on.",
+      title: "Graduation recap",
+      brief: "Edit a 30 second graduation recap for Maya. Keep her speech, remove the wind, and put captions on.",
+      items: [
+        line("c1", "Keep her speech", "include", ["speech"]),
+        line("c2", "Remove the wind", "include", ["wind"]),
+        line("c3", "Put captions on", "include", ["captions"]),
+        line("c4", "At least 30 seconds", "duration", [], 30),
+      ],
+      text: "A 30 second graduation recap for Maya. I kept her speech and removed the wind noise. The finished work is attached and ready to use.",
     }),
     openJob({
       id: 1003,
@@ -384,27 +415,49 @@ export async function buildSeed() {
       offerId: "page",
       at: now - 9 * HOUR,
       studio: true,
-      brief: "A one-page website for Northroom's spring drop. Include the date, a lineup of the five members, and a mailing list. Clean, not corporate. It has to work on a phone.",
+      brief: "A one-page site for Northroom Coffee. Include the menu, the address, and a phone-friendly layout. Clean, not corporate.",
     }),
     releasedJob({
       id: 1004,
-      buyerId: "eden",
-      creatorId: "leo",
-      offerId: "birthday",
-      at: now - 3 * DAY,
-      studio: true,
-      quote: "Jules, Northroom saved you a seat.",
-      brief: "A 15 second birthday shoutout for Jules. Mention Northroom and the spring drop. Keep it playful.",
-      text: "Jules, happy birthday. Northroom saved you a seat. The spring drop is yours. The cut is 15 seconds long. I am speaking on camera, straight to you, and I kept the tone playful.",
+      buyerId: "maya",
+      creatorId: "amina",
+      offerId: "photos",
+      at: now - 1 * DAY,
+      brief: "Shoot 15 photos at the Longhorn Hack Night. Need a wide crowd shot, 3 speaker close-ups, and the sponsor banner visible.",
+      items: [
+        line("c1", "Wide crowd shot", "include", ["crowd"]),
+        line("c2", "3 speaker close-ups", "include", ["speaker"]),
+        line("c3", "Sponsor banner visible", "include", ["sponsor", "banner"]),
+      ],
+      text: "Shot 15 photos at the Longhorn Hack Night. Wide crowd shot, three speaker close-ups, and the sponsor banner is visible. The finished set is attached and ready to use.",
     }),
-    openJob({
+    releasedJob({
       id: 1005,
       buyerId: "eden",
-      creatorId: "priya",
-      offerId: "edit",
-      at: now - 20 * HOUR,
-      studio: true,
-      brief: "Cut three 15 second member intros for Northroom. Each one says the member name and what they make. Put captions on.",
+      creatorId: "harper",
+      offerId: "logo",
+      at: now - 2 * DAY,
+      brief: "A logo for Northroom Coffee. 3 colors max, SVG and PNG, and it has to work on a dark background.",
+      items: [
+        line("c1", "3 colors max", "include", ["colors"]),
+        line("c2", "SVG and PNG", "include", ["svg", "png"]),
+        line("c3", "Works on a dark background", "include", ["dark"]),
+      ],
+      text: "Logo for Northroom Coffee. Three colors, delivered as SVG and PNG, and it works on a dark background. The finished files are attached and ready to use.",
+    }),
+    releasedJob({
+      id: 1006,
+      buyerId: "maya",
+      creatorId: "mateo",
+      offerId: "form",
+      at: now - 3 * DAY,
+      brief: "A form-check video on my squat. Give me 3 fixes with timestamps.",
+      items: [
+        line("c1", "3 fixes", "include", ["fixes"]),
+        line("c2", "With timestamps", "include", ["timestamps"]),
+        line("c3", "On the squat", "include", ["squat"]),
+      ],
+      text: "Form-check video on your squat. Three fixes with timestamps: knees at 0:12, depth at 0:28, lockout at 0:41. I am speaking on camera, straight to you.",
     }),
   ];
 
@@ -436,99 +489,80 @@ export async function buildSeed() {
     delete jobs.at(-1).escrowId;
   }
 
-  const posts = [
-    {
-      id: "p1001",
-      creatorId: "leo",
-      buyerId: "maya",
-      jobId: "j1001",
-      kind: "shoutout",
-      title: "Birthday shoutout",
-      quote: "She said yes. Tell her the good part twice.",
-      amountCents: 2800,
-      at: now - 5 * HOUR,
+  const cards = {
+    j1001: {
+      scene: "shoutout",
+      quote: "Leo completed: 30s birthday shoutout for Sam — say her name, mention UT, end with a cheer",
+      requirements: ["Say her name", "Mention UT", "End with a cheer"],
     },
-    {
-      id: "p1004",
-      creatorId: "leo",
-      buyerId: "eden",
-      jobId: "j1004",
-      kind: "shoutout",
-      title: "Birthday shoutout",
-      quote: "Jules, Northroom saved you a seat.",
-      amountCents: 2800,
-      at: now - 3 * DAY + HOUR,
+    j1002: {
+      scene: "edit",
+      quote: "Priya submitted: 30s graduation recap for Maya — keep the speech, drop the wind, add captions",
+      requirements: ["Keep her speech", "Remove the wind", "Put captions on", "At least 30 seconds"],
     },
-    {
-      id: "p2",
-      creatorId: "harper",
-      buyerId: "maya",
-      jobId: null,
-      kind: "shoutout",
-      title: "Advice, on camera",
-      quote: "Take the interview. You already did the hard part.",
-      amountCents: 4800,
-      at: now - 26 * HOUR,
+    j1004: {
+      scene: "photos",
+      quote: "Amina completed: Shoot 15 photos at the Longhorn Hack Night — wide crowd shot, 3 speaker close-ups, sponsor banner visible",
+      requirements: ["Wide crowd shot", "3 speaker close-ups", "Sponsor banner visible"],
     },
-    {
-      id: "p3",
-      creatorId: "amina",
-      buyerId: "maya",
-      jobId: null,
-      kind: "shoutout",
-      title: "A jingle",
-      quote: "Hearth and rye. The door's open tonight.",
-      amountCents: 7500,
-      at: now - 2 * DAY,
+    j1005: {
+      scene: "logo",
+      quote: "Harper completed: Logo for Northroom Coffee — 3 colors max, SVG + PNG, works on dark background",
+      requirements: ["3 colors max", "SVG and PNG", "Works on a dark background"],
     },
-    {
-      id: "p4",
-      creatorId: "mateo",
-      buyerId: "eden",
-      jobId: null,
-      kind: "shoutout",
-      title: "Form check",
-      quote: "Knees out. That's the rep that counts.",
-      amountCents: 3200,
-      at: now - 4 * DAY,
+    j1006: {
+      scene: "squat",
+      quote: "Mateo completed: Form-check video on your squat — 3 fixes with timestamps",
+      requirements: ["3 fixes", "With timestamps", "On the squat"],
     },
-    {
-      id: "p5",
-      creatorId: "jules",
-      buyerId: "eden",
-      jobId: null,
-      kind: "work",
-      title: "Northroom's mark",
-      quote: "Three colors. One sharp bird.",
-      amountCents: 14000,
-      at: now - 5 * DAY,
-    },
-    {
-      id: "p6",
-      creatorId: "sable",
-      buyerId: "maya",
-      jobId: null,
-      kind: "shoutout",
-      title: "A short song",
-      quote: "I wrote this one for your Tuesday.",
-      amountCents: 5500,
-      at: now - 8 * DAY,
-    },
-  ].map((post) => ({ ...post, lines: captionLines(post.quote) }));
+  };
+  const posts = specs.filter((job) => cards[job.id]).map((job) => {
+    const card = cards[job.id];
+    const results = job.verdict.items;
+    const met = results.filter((item) => item.met).length;
+    const requirements = card.requirements.map((text) => ({
+      text,
+      met: results.find((item) => item.text === text)?.met !== false,
+    }));
+    const missing = requirements.filter((item) => !item.met).length;
+    return {
+      id: `p${job.id.slice(1)}`,
+      creatorId: job.creatorId,
+      buyerId: job.buyerId,
+      jobId: job.id,
+      kind: job.kind,
+      title: job.title,
+      quote: card.quote,
+      requirements,
+      verdict: {
+        passed: job.verdict.passed,
+        met,
+        total: results.length,
+        label: job.verdict.passed
+          ? `Judge: ${met}/${results.length} requirements met`
+          : `Judge flagged ${missing} of ${requirements.length} · resubmit`,
+      },
+      scene: card.scene,
+      status: job.status,
+      amountCents: job.amountCents,
+      at: job.releasedAt || job.createdAt,
+      lines: captionLines(card.quote),
+    };
+  });
 
   const likes = [
     ["p1001", "maya"],
     ["p1001", "eden"],
     ["p1001", "harper"],
-    ["p2", "maya"],
-    ["p3", "leo"],
-    ["p3", "maya"],
-    ["p5", "eden"],
-    ["p5", "noah"],
+    ["p1004", "leo"],
+    ["p1004", "maya"],
+    ["p1005", "eden"],
+    ["p1005", "noah"],
+    ["p1006", "maya"],
   ].map(([postId, userId]) => ({ postId, userId }));
 
   return {
-    version: 2,
+    version: 3,
     users,
     follows,
     likes,

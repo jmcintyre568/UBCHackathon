@@ -8,7 +8,6 @@ import { parseAskMention } from "./mentions.mjs";
 import { parseStreamBody } from "./streams.mjs";
 import {
   captionLines,
-  cardQuote,
   checklistFromBrief,
   deliverableHash,
   evaluate,
@@ -18,7 +17,7 @@ import {
 } from "./logic.mjs";
 import { buildSeed } from "./seed.mjs";
 
-const VERSION = 2;
+const VERSION = 3;
 let state = null;
 
 function storeFile() {
@@ -336,9 +335,38 @@ async function judgeJob(job, text) {
   return evaluate(job.items, text);
 }
 
+function sceneFor(job) {
+  const hay = `${job.title} ${job.brief}`.toLowerCase();
+  if (/photo|shoot|crowd/.test(hay)) return "photos";
+  if (/logo|mark|svg/.test(hay)) return "logo";
+  if (/squat|form|workout/.test(hay)) return "squat";
+  if (/edit|recap|caption/.test(hay)) return "edit";
+  if (/song|jingle/.test(hay)) return "song";
+  if (/page|website|site/.test(hay)) return "page";
+  return "shoutout";
+}
+
+function feedVerdict(verdict) {
+  const items = verdict?.items || [];
+  const met = items.filter((item) => item.met).length;
+  const missing = items.length - met;
+  const passed = Boolean(verdict?.passed);
+  return {
+    passed,
+    met,
+    total: items.length,
+    label: passed
+      ? `Judge: ${met}/${items.length} requirements met`
+      : `Judge flagged ${missing} of ${items.length} · resubmit`,
+  };
+}
+
 async function publish(job) {
   if (state.posts.some((post) => post.jobId === job.id)) return;
-  const text = job.deliverable?.text || job.title;
+  const creator = userById(job.creatorId);
+  const buyer = userById(job.buyerId);
+  const verdict = feedVerdict(job.verdict);
+  const quote = `${creator.first} completed: ${job.title} for ${buyer.first}`;
   state.posts.unshift({
     id: `p${job.escrow.id}`,
     creatorId: job.creatorId,
@@ -346,8 +374,12 @@ async function publish(job) {
     jobId: job.id,
     kind: job.kind,
     title: job.title,
-    quote: cardQuote(text),
-    lines: captionLines(text),
+    quote,
+    requirements: (job.verdict?.items || job.items || []).map((item) => ({ text: item.text, met: item.met !== false })),
+    verdict,
+    scene: sceneFor(job),
+    status: job.status,
+    lines: captionLines(quote),
     amountCents: job.amountCents,
     at: Date.now(),
   });

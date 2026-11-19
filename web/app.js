@@ -184,13 +184,28 @@ function stories() {
     <a class="story" href="#/u/${who.id}">${avatar(who, "lg")}<small>${esc(who.first)}</small></a>`).join("");
 }
 
-function clip(post) {
+function requirementChips(post) {
+  return (post.requirements || []).map((item) => `<span class="req ${item.met === false ? "no" : "ok"}">${esc(item.text)}</span>`).join("");
+}
+
+function clip(post, linked = true) {
   const creator = person(post.creatorId);
-  const foot = `${avatar(creator, "sm")}<span><b>${esc(creator.first)}</b><small>${esc(post.title)}</small></span><em class="paid">Paid ${money(post.amountCents)}</em>`;
-  if (post.kind === "work") {
-    return `<a class="work-card" href="#/post/${post.id}"><p class="kicker">The work</p><h3>${esc(post.quote)}</h3><p>${esc(post.title)}</p><div class="card-foot">${foot}</div></a>`;
-  }
-  return `<a class="clip" href="#/post/${post.id}" style="--h:${creator.hue}"><span class="play icon-play">${icon("play")}</span><blockquote>${esc(post.quote)}</blockquote><div class="card-foot">${foot}</div></a>`;
+  const buyer = person(post.buyerId);
+  const passed = post.verdict ? post.verdict.passed !== false : post.status !== "flagged";
+  const badge = post.verdict?.label
+    ? `<span class="verdict-pill ${passed ? "" : "no"}">${esc(post.verdict.label)}${passed ? " ✓" : ""}</span>`
+    : "";
+  const tag = linked ? "a" : "article";
+  const href = linked ? ` href="#/post/${post.id}"` : "";
+  return `<${tag} class="deal"${href} style="--h:${creator?.hue ?? 200}">
+    <div class="scene">${sceneSvg(post.scene || (post.kind === "work" ? "logo" : "shoutout"))}</div>
+    <div class="deal-body">
+      <p class="deal-line">${esc(post.quote)}</p>
+      <div class="reqs">${requirementChips(post)}</div>
+      ${badge}
+      <div class="card-foot">${avatar(creator, "sm")}<span><b>${esc(creator?.first || "")}</b><small>for ${esc(buyer?.first || "a client")}</small></span><em class="paid ${passed ? "" : "held"}">${passed ? "Paid" : "Held"} ${money(post.amountCents)}</em></div>
+    </div>
+  </${tag}>`;
 }
 
 function liveStrip() {
@@ -401,9 +416,9 @@ function renderPost(id) {
     back: "#/",
     title: creator.first,
     tabs: false,
-    body: `<div class="stage-card" style="--h:${creator.hue}"><button class="play icon-play" type="button" data-act="play" data-id="${post.id}" aria-label="Play">${icon("play")}</button><p class="caption" id="caption">${esc(post.quote)}</p><div class="bar"><span id="playbar"></span></div></div>
+    body: `${clip(post, false)}
       <div class="row"><div class="who-link">${avatar(creator)}<span><b>${esc(creator.name)}</b><small>for ${esc(buyer?.first || "someone")} · ${ago(post.at)}</small></span></div><button class="follow ${liked ? "on" : ""}" type="button" data-act="like" data-id="${post.id}" data-likes="${likes}">${liked ? "Liked" : "Like"} <span data-like-count>${likes || ""}</span></button></div>
-      <p class="fine" style="margin-top:12px">${esc(post.title)} · Paid ${money(post.amountCents)}</p>`,
+      <p class="fine" style="margin-top:12px">${esc(post.title)} · ${post.status === "flagged" ? "Held" : "Paid"} ${money(post.amountCents)}</p>`,
   });
 }
 
