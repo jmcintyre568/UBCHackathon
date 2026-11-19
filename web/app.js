@@ -62,7 +62,7 @@ function person(id) {
 function route() {
   const parts = (location.hash || "#/").replace(/^#/, "").split("/").filter(Boolean);
   const name = parts[0] || "feed";
-  const known = ["feed", "people", "asks", "you", "board", "u", "ask", "job", "post", "receipt", "studio", "how"];
+  const known = ["feed", "people", "asks", "you", "u", "ask", "job", "post", "receipt", "studio", "how"];
   if (!parts.length) return { name: "feed" };
   if (name === "u") return { name: "profile", id: parts[1] };
   if (!known.includes(name)) return { name: "feed" };
@@ -200,10 +200,6 @@ function liveStrip() {
   return `<p class="live"><i></i>${esc(item.label)} <small>${esc(where)}</small></p>`;
 }
 
-function rankedCreators() {
-  return db.users.filter((who) => who.offers?.length).sort((a, b) => b.earnedCents - a.earnedCents || b.jobs - a.jobs);
-}
-
 function badges(who) {
   const chips = [];
   if (who.onTime >= 98) chips.push(["hot", "On a streak"]);
@@ -212,41 +208,9 @@ function badges(who) {
   return chips.map(([kind, label]) => `<span class="badge ${kind}">${esc(label)}</span>`).join("");
 }
 
-function trending() {
-  return rankedCreators().slice(0, 6).map((who) => `
-    <a class="trend" href="#/u/${who.id}">${avatar(who, "sm")}<b>${esc(who.first)}</b><span class="gain">${money(who.earnedCents)}</span><small>${who.jobs} jobs</small></a>`).join("");
-}
-
-function payTicks() {
-  return db.posts.slice(0, 4).map((post) => {
-    const creator = person(post.creatorId);
-    const buyer = person(post.buyerId);
-    return `<a class="tick" href="#/post/${post.id}">${avatar(buyer, "sm")}<span><b>${esc(buyer?.first || "Someone")}</b> paid ${money(post.amountCents)} to <b>${esc(creator.first)}</b></span><em>${ago(post.at)}</em></a>`;
-  }).join("");
-}
-
 function renderFeed() {
   return frame({
-    body: `<h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p>
-      <a class="promo" href="#/people"><p class="kicker">Open now</p><h2>Find a person.</h2><p>A shoutout, an edit, a page.</p><span class="btn">Browse</span></a>
-      ${liveStrip()}
-      <div class="job-top"><p class="kicker">Top creators this week</p><a class="btn text" href="#/board">Ranks</a></div>
-      <div class="h-scroll">${trending()}</div>
-      <div class="stories">${stories()}</div>
-      ${banner()}
-      <p class="kicker">Just paid</p>
-      ${payTicks()}
-      <div class="feed">${db.posts.map(clip).join("")}</div>`,
-  });
-}
-
-function renderBoard() {
-  const rows = rankedCreators().map((who, index) => {
-    const on = db.following.includes(who.id);
-    return `<div class="rank"><b class="place">${index + 1}</b>${avatar(who)}<a class="who-link" href="#/u/${who.id}"><span><b>${esc(who.name)}</b><small>${who.jobs} jobs · ${who.onTime}% on time</small></span></a><em class="gain">${money(who.earnedCents)}</em>${who.id === db.me.id ? "" : `<button class="follow ${on ? "on" : ""}" type="button" data-act="follow" data-id="${who.id}">${on ? "Following" : "Follow"}</button>`}</div>`;
-  }).join("");
-  return frame({
-    body: `<h1 class="display">Ranks.</h1><p class="lede">By what's been released to them.</p>${rows}`,
+    body: `<h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p>${liveStrip()}<div class="stories">${stories()}</div>${banner()}<div class="feed">${db.posts.map(clip).join("")}</div>`,
   });
 }
 
@@ -538,7 +502,6 @@ function render() {
   if (current.name === "people") return renderPeople();
   if (current.name === "asks") return renderAsks();
   if (current.name === "you") return renderYou();
-  if (current.name === "board") return renderBoard();
   if (current.name === "profile") return renderProfile(current.id);
   if (current.name === "ask") return renderAsk(current.id);
   if (current.name === "job") return renderJob(current.id);
