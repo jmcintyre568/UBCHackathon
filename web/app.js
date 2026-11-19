@@ -62,7 +62,7 @@ function person(id) {
 function route() {
   const parts = (location.hash || "#/").replace(/^#/, "").split("/").filter(Boolean);
   const name = parts[0] || "feed";
-  const known = ["feed", "people", "asks", "you", "u", "ask", "job", "post", "receipt", "studio", "how"];
+  const known = ["feed", "people", "asks", "you", "board", "u", "ask", "job", "post", "receipt", "studio", "how"];
   if (!parts.length) return { name: "feed" };
   if (name === "u") return { name: "profile", id: parts[1] };
   if (!known.includes(name)) return { name: "feed" };
@@ -200,9 +200,53 @@ function liveStrip() {
   return `<p class="live"><i></i>${esc(item.label)} <small>${esc(where)}</small></p>`;
 }
 
+function rankedCreators() {
+  return db.users.filter((who) => who.offers?.length).sort((a, b) => b.earnedCents - a.earnedCents || b.jobs - a.jobs);
+}
+
+function badges(who) {
+  const chips = [];
+  if (who.onTime >= 98) chips.push(["hot", "On a streak"]);
+  if (who.jobs >= 30) chips.push(["", "Regular"]);
+  if (who.earnedCents >= 100000) chips.push(["money", "Booked"]);
+  return chips.map(([kind, label]) => `<span class="badge ${kind}">${esc(label)}</span>`).join("");
+}
+
+function trending() {
+  return rankedCreators().slice(0, 6).map((who) => `
+    <a class="trend" href="#/u/${who.id}">${avatar(who, "sm")}<b>${esc(who.first)}</b><span class="gain">${money(who.earnedCents)}</span><small>${who.jobs} jobs</small></a>`).join("");
+}
+
+function payTicks() {
+  return db.posts.slice(0, 4).map((post) => {
+    const creator = person(post.creatorId);
+    const buyer = person(post.buyerId);
+    return `<a class="tick" href="#/post/${post.id}">${avatar(buyer, "sm")}<span><b>${esc(buyer?.first || "Someone")}</b> paid ${money(post.amountCents)} to <b>${esc(creator.first)}</b></span><em>${ago(post.at)}</em></a>`;
+  }).join("");
+}
+
 function renderFeed() {
   return frame({
-    body: `<h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p>${liveStrip()}<div class="stories">${stories()}</div>${banner()}<div class="feed">${db.posts.map(clip).join("")}</div>`,
+    body: `<h1 class="display">Ask someone.</h1><p class="lede">Pay when it's done.</p>
+      <a class="promo" href="#/people"><p class="kicker">Open now</p><h2>Find a person.</h2><p>A shoutout, an edit, a page.</p><span class="btn">Browse</span></a>
+      ${liveStrip()}
+      <div class="job-top"><p class="kicker">Top creators this week</p><a class="btn text" href="#/board">Ranks</a></div>
+      <div class="h-scroll">${trending()}</div>
+      <div class="stories">${stories()}</div>
+      ${banner()}
+      <p class="kicker">Just paid</p>
+      ${payTicks()}
+      <div class="feed">${db.posts.map(clip).join("")}</div>`,
+  });
+}
+
+function renderBoard() {
+  const rows = rankedCreators().map((who, index) => {
+    const on = db.following.includes(who.id);
+    return `<div class="rank"><b class="place">${index + 1}</b>${avatar(who)}<a class="who-link" href="#/u/${who.id}"><span><b>${esc(who.name)}</b><small>${who.jobs} jobs · ${who.onTime}% on time</small></span></a><em class="gain">${money(who.earnedCents)}</em>${who.id === db.me.id ? "" : `<button class="follow ${on ? "on" : ""}" type="button" data-act="follow" data-id="${who.id}">${on ? "Following" : "Follow"}</button>`}</div>`;
+  }).join("");
+  return frame({
+    body: `<h1 class="display">Ranks.</h1><p class="lede">By what's been released to them.</p>${rows}`,
   });
 }
 
@@ -245,6 +289,7 @@ function renderProfile(id) {
     title: who.first,
     tabs: false,
     body: `<div class="profile-head">${avatar(who, "xl")}<h2>${esc(who.name)}</h2><p class="muted">@${esc(who.handle)} · ${esc(who.city)}</p><p>${esc(who.bio)}</p></div>
+      <div class="badges">${badges(who)}</div>
       ${offer ? `<div class="pair"><button class="follow ${following || mine ? "on" : ""}" type="button" data-act="follow" data-id="${who.id}" ${mine ? "disabled" : ""}>${mine ? "This is you" : following ? "Following" : "Follow"}</button>${mine ? "" : `<a class="btn primary" href="#/ask/${who.id}">Ask · ${money(offer.priceCents)}</a>`}</div>` : ""}
       ${who.offers.length ? `<div class="stats"><div class="stat"><b>${who.jobs}</b><span>jobs</span></div><div class="stat"><b data-followers="${who.id}">${who.followers.toLocaleString("en-US")}</b><span>followers</span></div><div class="stat"><b>${who.onTime}%</b><span>on time</span></div></div>
       <section class="panel"><p class="kicker">Portable record</p><p>It stays with this account, not with an app.</p><div class="copyline"><code>${esc(shortKey(who.wallet))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(who.wallet)}">Copy</button></div></section>` : `<p class="fine">${esc(who.first)} follows ${who.followingCount} people.</p>`}
@@ -413,7 +458,13 @@ function renderReceipt(id) {
     back: `#/job/${job.id}`,
     title: "Receipt",
     tabs: false,
-    body: `<p class="kicker">${esc(clusterName)}</p><div class="hero-money">${money(job.amountCents)}</div><p class="lede">${esc(buyer.first)} → ${esc(creator.first)}</p>
+    body: `<div class="share-card" id="share-card"><p class="kicker">${esc(clusterName)}</p><div class="hero-money">${money(job.amountCents)}</div><p>${esc(buyer.first)} paid ${esc(creator.first)}</p><p class="fine">${esc(job.title)}</p></div>
+      <div class="share-actions">
+        <button type="button" data-act="share-card" data-id="${job.id}">Share</button>
+        <button type="button" data-act="copy-link" data-id="${job.id}">Copy link</button>
+        <button type="button" data-act="copy-image" data-id="${job.id}">Copy image</button>
+      </div>
+      <p class="lede">${esc(buyer.first)} → ${esc(creator.first)}</p>
       <section class="panel"><p class="kicker">Program</p><p>trustlancer escrow</p><div class="copyline"><code>${esc(shortKey(db.engine.programId))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(db.engine.programId)}">Copy</button></div>
         <p class="kicker">Escrow account</p><div class="copyline"><code>${esc(shortKey(job.escrow.pda))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(job.escrow.pda)}">Copy</button></div>
         ${job.escrow.hash ? `<p class="kicker">Deliverable</p><div class="copyline"><code>${esc(shortKey(job.escrow.hash))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(job.escrow.hash)}">Copy</button></div>` : ""}
@@ -487,6 +538,7 @@ function render() {
   if (current.name === "people") return renderPeople();
   if (current.name === "asks") return renderAsks();
   if (current.name === "you") return renderYou();
+  if (current.name === "board") return renderBoard();
   if (current.name === "profile") return renderProfile(current.id);
   if (current.name === "ask") return renderAsk(current.id);
   if (current.name === "job") return renderJob(current.id);
@@ -723,6 +775,11 @@ async function onClick(event) {
       play(post);
       return;
     }
+    if (act === "share-card" || act === "copy-link" || act === "copy-image") {
+      const job = db.jobs.find((entry) => entry.id === el.dataset.id);
+      await shareReceipt(act, job);
+      return;
+    }
     if (act === "announce") {
       const res = await api("/api/me/announce", { method: "POST", body: { on: el.dataset.on === "1" } });
       db.me.announce = res.announce;
@@ -758,6 +815,65 @@ async function onClick(event) {
     }
   } catch (error) {
     toast(error.message || "Something went wrong.");
+  }
+}
+
+function receiptBlurb(job) {
+  const buyer = person(job.buyerId);
+  const creator = person(job.creatorId);
+  return `${buyer.first} paid ${money(job.amountCents)} to ${creator.first} on Holler. ${job.title}.`;
+}
+
+function cardBlob(job) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const ctx = canvas.getContext("2d");
+  const wash = ctx.createLinearGradient(0, 0, 1080, 1350);
+  wash.addColorStop(0, "#2a3dff");
+  wash.addColorStop(0.55, "#10131f");
+  wash.addColorStop(1, "#07080f");
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, 1080, 1350);
+  ctx.fillStyle = "#1dff8a";
+  ctx.font = "800 48px Inter, sans-serif";
+  ctx.fillText("holler", 80, 160);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 128px Inter, sans-serif";
+  ctx.fillText(money(job.amountCents), 80, 460);
+  ctx.font = "700 44px Inter, sans-serif";
+  ctx.fillText(receiptBlurb(job).slice(0, 72), 80, 580);
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+async function shareReceipt(act, job) {
+  if (!job) return;
+  const url = `${location.origin}${location.pathname}#/receipt/${job.id}`;
+  const text = receiptBlurb(job);
+  if (act === "copy-link") {
+    await navigator.clipboard.writeText(url);
+    toast("Link copied.");
+    return;
+  }
+  if (act === "share-card") {
+    if (navigator.share) {
+      await navigator.share({ title: "Holler", text, url });
+      return;
+    }
+    await navigator.clipboard.writeText(`${text} ${url}`);
+    toast("Copied.");
+    return;
+  }
+  const blob = await cardBlob(job);
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    toast("Card copied.");
+  } catch {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "holler-receipt.png";
+    link.click();
+    toast("Card saved.");
   }
 }
 
