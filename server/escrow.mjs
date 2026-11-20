@@ -99,12 +99,19 @@ export async function ensureMint(buyerIds = []) {
   const feePayer = await feePayerKeypair();
   const saved = loadConfig();
   if (!mintKey) {
-    if (saved.mint && saved.cluster === chainMode()) {
+    // A mint made by an earlier fee payer can't be minted to by this one.
+    if (saved.mint && saved.cluster === chainMode() && saved.mintAuthority === feePayer.publicKey.toBase58()) {
       const { PublicKey } = await import("@solana/web3.js");
       mintKey = new PublicKey(saved.mint);
     } else {
       mintKey = await createMint(connection, feePayer, feePayer.publicKey, null, 6);
-      saveConfig({ ...saved, cluster: chainMode(), mint: mintKey.toBase58(), programId: PROGRAM_ID });
+      saveConfig({
+        ...saved,
+        cluster: chainMode(),
+        mint: mintKey.toBase58(),
+        mintAuthority: feePayer.publicKey.toBase58(),
+        programId: PROGRAM_ID,
+      });
       console.log(`[holler] demo USDC mint ${mintKey.toBase58()}`);
     }
   }

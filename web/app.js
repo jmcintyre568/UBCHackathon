@@ -444,7 +444,7 @@ function renderReceipt(id) {
         <button type="button" data-act="copy-image" data-id="${job.id}">Copy image</button>
       </div>
       <p class="lede">${esc(buyer.first)} → ${esc(creator.first)}</p>
-      <section class="panel"><p class="kicker">Program</p><p>trustlancer escrow</p><div class="copyline"><code>${esc(shortKey(db.engine.programId))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(db.engine.programId)}">Copy</button></div>
+      <section class="panel"><p class="kicker">Program</p><p>Holler escrow on Solana</p><div class="copyline"><code>${esc(shortKey(db.engine.programId))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(db.engine.programId)}">Copy</button></div>
         <p class="kicker">Escrow account</p><div class="copyline"><code>${esc(shortKey(job.escrow.pda))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(job.escrow.pda)}">Copy</button></div>
         ${job.escrow.hash ? `<p class="kicker">Deliverable</p><div class="copyline"><code>${esc(shortKey(job.escrow.hash))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(job.escrow.hash)}">Copy</button></div>` : ""}
         <p class="kicker">Transaction</p>${sig ? `<div class="copyline"><code>${esc(shortKey(sig))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(sig)}">Copy</button></div>${signed.explorer ? `<a class="btn primary block" href="${esc(signed.explorer)}" target="_blank" rel="noreferrer">View on explorer</a>` : `<p class="fine">Signed by the app's fee payer. You don't hold SOL for this.</p>`}` : `<p class="fine">No network broadcast yet. The hold still follows the program, and the account above is the real address for this buyer and id.</p>`}
@@ -508,7 +508,7 @@ function renderHow() {
       <section class="panel"><p>You describe the ask. A checklist turns the vague parts into lines someone can actually hit.</p></section>
       <section class="panel"><p>The price is held until every line is covered. Then it releases. If it misses, the money stays.</p></section>
       <section class="panel"><p>You can pay anyway, or both of you can send it back. Freezing it locks the hold until you both agree.</p></section>
-      <section class="panel"><p class="kicker">Underneath</p><p>Dollars are USDC in the trustlancer escrow program on Solana. The receipt has the account. You never see a seed phrase, and you don't pay the network fee.</p><p class="fine">The judge is Grok when a key is set. Otherwise the demo judge checks for your own words.</p></section>`,
+      <section class="panel"><p class="kicker">Underneath</p><p>Dollars are USDC in the Holler escrow program on Solana. The receipt has the account. You never see a seed phrase, and you don't pay the network fee.</p><p class="fine">The judge is Grok when a key is set. Otherwise the demo judge checks for your own words.</p></section>`,
   });
 }
 

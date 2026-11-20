@@ -1,5 +1,5 @@
 {
-  "name": "trustlancer-escrow-tests",
+  "name": "holler",
   "private": true,
   "scripts": {
     "start": "node server/index.mjs",

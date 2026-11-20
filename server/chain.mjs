@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -34,9 +34,33 @@ async function loadWeb3() {
   return web3;
 }
 
+// Embedded wallets are derived from a secret that never leaves this machine:
+// HOLLER_WALLET_SECRET, or a random value saved once in data/wallet-secret.
+// Nothing in the repo is enough to rebuild a user's key.
+let walletSecret = null;
+
+function getWalletSecret() {
+  if (walletSecret) return walletSecret;
+  if (process.env.HOLLER_WALLET_SECRET) {
+    walletSecret = process.env.HOLLER_WALLET_SECRET;
+    return walletSecret;
+  }
+  const file = join(process.cwd(), "data", "wallet-secret");
+  if (process.env.HOLLER_STORE !== "memory" && existsSync(file)) {
+    walletSecret = readFileSync(file, "utf8").trim();
+    if (walletSecret) return walletSecret;
+  }
+  walletSecret = randomBytes(32).toString("hex");
+  if (process.env.HOLLER_STORE !== "memory") {
+    mkdirSync(join(process.cwd(), "data"), { recursive: true });
+    writeFileSync(file, walletSecret, { mode: 0o600 });
+  }
+  return walletSecret;
+}
+
 export async function keypairFor(id) {
   const { Keypair } = await loadWeb3();
-  const seed = createHash("sha256").update(`holler-user:${id}`).digest();
+  const seed = createHash("sha256").update(`holler-user:${getWalletSecret()}:${id}`).digest();
   return Keypair.fromSeed(seed);
 }
 
@@ -45,19 +69,31 @@ export async function pubkeyFor(id) {
   return kp.publicKey.toBase58();
 }
 
+// The fee payer is a random keypair kept out of git: FEE_PAYER_KEYPAIR, or
+// data/fee-payer.json (written by scripts/deploy-devnet.sh). If neither exists
+// on devnet/localnet, a new one is generated and saved, and it needs SOL.
+let feePayer = null;
+
 export async function feePayerKeypair() {
+  if (feePayer) return feePayer;
   const { Keypair } = await loadWeb3();
-  if (process.env.FEE_PAYER_KEYPAIR) {
-    const { readFileSync } = await import("node:fs");
-    const raw = JSON.parse(readFileSync(process.env.FEE_PAYER_KEYPAIR, "utf8"));
-    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  const file = process.env.FEE_PAYER_KEYPAIR || join(process.cwd(), "data", "fee-payer.json");
+  if (existsSync(file)) {
+    const raw = JSON.parse(readFileSync(file, "utf8"));
+    feePayer = Keypair.fromSecretKey(Uint8Array.from(raw));
+    return feePayer;
   }
   const cluster = process.env.SOLANA_CLUSTER || "devnet";
   if (cluster === "mainnet-beta" || cluster === "mainnet") {
-    throw new Error("Set FEE_PAYER_KEYPAIR for mainnet. The demo fee-payer seed is refused there.");
+    throw new Error("Set FEE_PAYER_KEYPAIR to a funded keypair file for mainnet.");
   }
-  const seed = createHash("sha256").update("holler-fee-payer-v1").digest();
-  return Keypair.fromSeed(seed);
+  feePayer = Keypair.generate();
+  if (process.env.HOLLER_STORE !== "memory") {
+    mkdirSync(join(process.cwd(), "data"), { recursive: true });
+    writeFileSync(file, JSON.stringify(Array.from(feePayer.secretKey)), { mode: 0o600 });
+    console.warn(`[holler] new fee payer ${feePayer.publicKey.toBase58()} saved to ${file}. Fund it with devnet SOL.`);
+  }
+  return feePayer;
 }
 
 export function explorerUrl(signature, cluster = mode) {

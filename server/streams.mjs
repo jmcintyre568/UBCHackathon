@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 // QuickNode Streams posts matching transactions here. The same parser also
 // accepts a plain event, so a local ledger and a stream fill one live feed.
 
@@ -58,8 +60,19 @@ export function parseStreamBody(body) {
   });
 }
 
+function hookSecret() {
+  return process.env.HOLLER_HOOK_SECRET || process.env.QUICKNODE_WEBHOOK_SECRET || "";
+}
+
+export function hookSecretSet() {
+  return Boolean(hookSecret());
+}
+
+// With no secret set, callers must also be local (see hookOk in index.mjs).
 export function hookAuthorized(header) {
-  const secret = process.env.HOLLER_HOOK_SECRET || process.env.QUICKNODE_WEBHOOK_SECRET || "";
+  const secret = hookSecret();
   if (!secret) return true;
-  return String(header || "") === secret;
+  const given = Buffer.from(String(header || ""));
+  const expected = Buffer.from(secret);
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
