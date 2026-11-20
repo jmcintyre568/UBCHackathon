@@ -284,6 +284,7 @@ export async function fundJob(userId, body) {
     counted: false,
     studio: buyer.id === "eden",
     checklistEngine: body.engine === "grok" ? "grok" : "demo",
+    reference: keepMedia(body.media),
     escrow: {
       id: escrowId,
       status: "active",
@@ -455,6 +456,20 @@ async function releaseJob(job) {
   });
 }
 
+function keepMedia(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const name = String(raw.name || "").trim().slice(0, 80);
+  const kind = raw.kind === "video" ? "video" : raw.kind === "image" ? "image" : "";
+  if (!name || !kind) return null;
+  const preview = kind === "image"
+    && typeof raw.preview === "string"
+    && raw.preview.startsWith("data:image/")
+    && raw.preview.length < 400000
+    ? raw.preview
+    : "";
+  return { name, kind, preview };
+}
+
 export async function submitJob(userId, jobId, body) {
   await getState();
   const me = requireUser(userId);
@@ -467,7 +482,7 @@ export async function submitJob(userId, jobId, body) {
   const packed = [text, link].filter(Boolean).join("\n");
   const verdict = await judgeJob(job, packed);
   verdict.at = Date.now();
-  job.deliverable = { text, link, hash: deliverableHash(packed), at: Date.now() };
+  job.deliverable = { text, link, hash: deliverableHash(packed), at: Date.now(), media: keepMedia(body.media) };
   job.verdict = verdict;
   job.escrow.events.push({
     action: "submit",

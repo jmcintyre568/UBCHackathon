@@ -41,7 +41,7 @@ function send(res, code, body, type = "application/json; charset=utf-8") {
   res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-async function readJson(req, limit = 100_000) {
+async function readJson(req, limit = 800_000) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {

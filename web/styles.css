@@ -401,6 +401,34 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .btn.text { display: block; width: fit-content; background: none; color: var(--blue); padding: 8px 0; border-radius: 0; box-shadow: none; }
 .sample-row { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .sample-row .btn.text { display: inline-flex; width: auto; }
+.library { margin: 14px 0 4px; }
+.library-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border-radius: 999px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 800;
+  cursor: pointer;
+}
+.library-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.library-preview { margin-top: 12px; }
+.library-preview img, .library-preview video {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 22px;
+  background: #10131c;
+}
 .btn.block { display: block; width: 100%; text-align: center; text-decoration: none; }
 .btn:disabled { opacity: 0.55; }
 .pair { display: flex; gap: 8px; }

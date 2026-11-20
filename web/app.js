@@ -1,6 +1,7 @@
 const local = {
   ask: null,
   texts: {},
+  clips: {},
   query: "",
   filter: "all",
   judging: null,
@@ -291,6 +292,7 @@ function ensureAsk(creator, offerId) {
       busy: false,
       dirty: false,
       reveal: false,
+      media: null,
     };
   }
   return local.ask;
@@ -301,7 +303,7 @@ function renderAsk(id) {
   if (!creator?.offers?.length) return frame({ back: "#/people", title: "Ask", body: `<p class="empty">They aren't taking asks.</p>`, tabs: false });
   const draft = ensureAsk(creator, route().offer);
   const offer = creator.offers.find((entry) => entry.id === draft.offerId) || creator.offers[0];
-  const checks = draft.items ? `<div id="checks"><p class="kicker">${draft.engine === "grok" ? "Written by Grok" : "Demo judge"}</p><p class="fine">These lines release the money.</p>${draft.items.map((item) => `<div class="check"><span><b>${esc(item.text)}</b></span><button class="x" type="button" data-act="drop" data-id="${esc(item.id)}" aria-label="Remove line">×</button></div>`).join("")}<form class="add-line" id="add-line"><input name="line" type="text" placeholder="Add a line" aria-label="Add a checklist line" /><button class="btn" type="submit">Add</button></form></div>` : "";
+  const checks = draft.items ? `<div id="checks"><p class="kicker">${draft.engine === "grok" ? "Written by Grok" : "Demo judge"}</p><p class="fine">These lines release the money.</p>${draft.items.map((item) => `<div class="check"><span><b>${esc(item.text)}</b></span><button class="x" type="button" data-act="drop" data-id="${esc(item.id)}" aria-label="Remove line">×</button></div>`).join("")}<form class="add-line" id="add-line"><input name="line" type="text" placeholder="Add a line" aria-label="Add a checklist line" /><button class="btn" type="submit">Add</button></form>${libraryField(draft.media)}</div>` : "";
   const dock = draft.items ? `<div class="dock"><div><small>${esc(offer.title)}</small><b>${money(offer.priceCents)}</b></div><button class="btn primary" type="button" data-act="hold" ${draft.busy || draft.items.length < 2 ? "disabled" : ""}>${draft.busy ? "Holding…" : `Hold ${money(offer.priceCents)}`}</button></div>` : "";
   return frame({
     back: `#/u/${creator.id}`,
@@ -316,6 +318,58 @@ function renderAsk(id) {
       ${draft.error ? `<p class="warn">${esc(draft.error)}</p>` : ""}
       ${draft.items ? `<button class="btn text" type="button" data-act="checklist">Rewrite the checklist</button>` : `<button class="btn primary block" type="button" data-act="checklist" ${draft.busy ? "disabled" : ""}>${draft.busy ? "Writing…" : "Write the checklist"}</button>`}
       ${checks}`,
+  });
+}
+
+function mediaPayload(media) {
+  if (!media) return null;
+  const preview = media.kind === "image" && typeof media.preview === "string" && media.preview.length < 350000
+    ? media.preview
+    : "";
+  return { name: String(media.name || "clip").slice(0, 80), kind: media.kind === "video" ? "video" : "image", preview };
+}
+
+function mediaView(media, label) {
+  if (!media) return "";
+  const picture = typeof media.preview === "string" && media.preview.startsWith("data:image/")
+    ? `<img alt="" src="${media.preview}" />`
+    : media.kind === "video" && media.url
+      ? `<video src="${esc(media.url)}" controls playsinline></video>`
+      : "";
+  return `<div class="library-preview"><p class="kicker">${esc(label)}</p>${picture}<p class="fine">${esc(media.name)}</p></div>`;
+}
+
+function libraryField(stored) {
+  return `<div class="library">
+    <label class="library-btn"><input id="library" type="file" accept="image/*,video/*" />Add from library</label>
+    ${stored ? `<button class="btn text" type="button" data-act="clear-media">Remove</button>` : ""}
+    ${mediaView(stored, "From your library")}
+  </div>`;
+}
+
+function readLibraryFile(file) {
+  if (file.type.startsWith("video/")) {
+    return Promise.resolve({ name: file.name, kind: "video", url: URL.createObjectURL(file), preview: "" });
+  }
+  if (!file.type.startsWith("image/")) return Promise.reject(new Error("Choose a photo or a video."));
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, 720 / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      const preview = canvas.toDataURL("image/jpeg", 0.62);
+      resolve({ name: file.name, kind: "image", url: preview, preview });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("That photo didn't open."));
+    };
+    img.src = url;
   });
 }
 
@@ -358,6 +412,7 @@ function renderJob(id) {
   let dock = "";
   if (mine === "creator" && (job.status === "funded" || (job.status === "flagged" && !job.verdict))) {
     actions = `<label class="kicker" for="note">What did you make?</label><textarea id="note" data-job="${job.id}" placeholder="The words you said, or what you handed over."></textarea>
+      ${libraryField(local.clips[job.id])}
       <div class="sample-row"><button class="btn text" type="button" data-act="sample" data-mode="pass" data-id="${job.id}">Fill a take that passes</button><button class="btn text" type="button" data-act="sample" data-mode="fail" data-id="${job.id}">Fill a take that misses</button></div>`;
     dock = `<div class="dock"><div><small>Send to ${esc(buyer.first)}</small><b>${money(job.amountCents)}</b></div><button class="btn primary" type="button" data-act="send" data-id="${job.id}">Send it</button></div>`;
   } else if (mine === "buyer" && job.status === "funded") {
@@ -398,6 +453,8 @@ function renderJob(id) {
     body: `${burst}<p class="tag ${tone}">${label}</p><div class="hero-money">${money(job.amountCents)}</div><h2 style="margin:0 0 8px">${esc(headline)}</h2><p class="lede">${esc(job.status === "flagged" || job.status === "released" ? sub : job.brief)}</p>
       ${job.verdict ? `<p class="fine">${esc(judgeLabel(job.verdict))}. ${esc(job.verdict.summary)}</p>` : ""}
       ${checklistView(job, job.verdict)}
+      ${mediaView(job.reference, "Reference")}
+      ${mediaView(job.deliverable?.media, "Attached")}
       <div style="height:12px"></div>
       ${actions}
       ${job.status === "released" ? `<a class="btn ghost block" href="#/receipt/${job.id}">View receipt</a>${post ? `<a class="btn text" href="#/post/${post.id}">See it on the feed</a>` : ""}` : ""}
@@ -443,6 +500,7 @@ function renderReceipt(id) {
         <button type="button" data-act="copy-link" data-id="${job.id}">Copy link</button>
         <button type="button" data-act="copy-image" data-id="${job.id}">Copy image</button>
       </div>
+      ${mediaView(job.deliverable?.media, "Attached")}
       <p class="lede">${esc(buyer.first)} → ${esc(creator.first)}</p>
       <section class="panel"><p class="kicker">Program</p><p>trustlancer escrow</p><div class="copyline"><code>${esc(shortKey(db.engine.programId))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(db.engine.programId)}">Copy</button></div>
         <p class="kicker">Escrow account</p><div class="copyline"><code>${esc(shortKey(job.escrow.pda))}</code><button class="btn text" type="button" data-act="copy" data-copy="${esc(job.escrow.pda)}">Copy</button></div>
@@ -568,6 +626,22 @@ function hydrate() {
     }
     note.value = local.texts[id];
     note.addEventListener("input", () => { local.texts[id] = note.value; });
+  }
+  const library = document.getElementById("library");
+  if (library) {
+    library.addEventListener("change", async () => {
+      const file = library.files?.[0];
+      if (!file) return;
+      try {
+        const media = await readLibraryFile(file);
+        const note = document.getElementById("note");
+        if (note?.dataset.job) local.clips[note.dataset.job] = media;
+        else if (local.ask) local.ask.media = media;
+        draw();
+      } catch (error) {
+        toast(error.message);
+      }
+    });
   }
   const add = document.getElementById("add-line");
   if (add) {
@@ -701,7 +775,7 @@ async function onClick(event) {
       try {
         const job = await api("/api/jobs", {
           method: "POST",
-          body: { creatorId: draft.creatorId, offerId: draft.offerId, brief: draft.brief, items: draft.items, engine: draft.engine },
+          body: { creatorId: draft.creatorId, offerId: draft.offerId, brief: draft.brief, items: draft.items, engine: draft.engine, media: mediaPayload(draft.media) },
         });
         const name = person(draft.creatorId).first;
         local.ask = null;
@@ -712,6 +786,13 @@ async function onClick(event) {
         draft.error = error.message;
         draw();
       }
+      return;
+    }
+    if (act === "clear-media") {
+      if (local.ask) local.ask.media = null;
+      const id = document.getElementById("note")?.dataset.job;
+      if (id) delete local.clips[id];
+      draw();
       return;
     }
     if (act === "sample") {
@@ -728,7 +809,7 @@ async function onClick(event) {
       draw();
       const started = Date.now();
       try {
-        const job = await api(`/api/jobs/${id}/submit`, { method: "POST", body: { text } });
+        const job = await api(`/api/jobs/${id}/submit`, { method: "POST", body: { text, media: mediaPayload(local.clips[id]) } });
         const wait = 900 - (Date.now() - started);
         if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
         if (job.status === "released") local.celebrate = job.id;

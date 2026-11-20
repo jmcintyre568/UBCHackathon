@@ -37,9 +37,9 @@ flowchart LR
 | Piece | What it is |
 | --- | --- |
 | App | Phone UI in `web/`. Node server in `server/`. |
-| Escrow | Anchor program `DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh` (`programs/trustlancer_escrow`). One milestone per ask: fund, submit, approve, dispute, refund. |
+| Escrow | Anchor program [`DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh`](https://explorer.solana.com/address/DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh?cluster=devnet), deployed on devnet. One milestone per ask: fund, submit, approve, dispute, refund. |
 | Judge | Grok via the xAI API when `XAI_API_KEY` is set. Otherwise `server/logic.mjs`. |
-| Chain | Solana devnet. QuickNode RPC via `SOLANA_RPC_URL`. Streams post escrow events to `/api/hooks/quicknode` (`quicknode/filter.js`). |
+| Chain | Solana devnet is live. `SOLANA_RPC_URL` can point at QuickNode; otherwise the app uses the public devnet RPC. Streams post escrow events to `/api/hooks/quicknode` (`quicknode/filter.js`). |
 | X | Optional. OAuth user tokens post a release. A bearer token reads `@holler` mentions. |
 
 Devnet keys, the fee payer, and a later mainnet swap are in [SETUP.md](SETUP.md). This program is a hackathon build. Do not put real funds in it.
@@ -57,13 +57,15 @@ Every transaction is signed by the buyer's or creator's embedded wallet and paid
 
 ## Demo
 
-[53-second walkthrough](media/holler-demo.mp4), recorded on devnet with the live Grok judge: scroll the feed, ask Leo for a shoutout, Grok writes the checklist, hold $28, Grok flags a take that misses and the money stays held, Leo resubmits, Grok passes every line and the hold releases, then the receipt, the transaction on Solana Explorer, and the You page. Waits for Grok and the network are cut.
+[46-second walkthrough](media/holler-demo.mp4): scroll the feed, ask Leo for a shoutout, hold $28 on devnet, watch the judge check each line, open the receipt's explorer link, then the You page.
 
 | Feed | A pass and a miss | Released | Receipt |
 | --- | --- | --- | --- |
 | ![Home feed](media/feed-top.png) | ![Flagged recap on the feed](media/feed-scrolled.png) | ![Released checklist](media/released.png) | ![Share card](media/receipt.png) |
 
-On a fresh start you are Maya. Open Leo, leave the Sam / UT / cheer note, tap **Write the checklist**, then **Hold $28**. **Continue** switches the phone to Leo. **Fill a take that passes** and **Send it**. The checklist goes green. **View receipt** is the share card. **View on explorer** opens the transaction on Solana Explorer. **Fill a take that misses** leaves the money held, and **Try another take** sends it again. The seeded feed jobs are put on devnet the first time the app starts, so their receipts have explorer links too.
+On a fresh start you are Maya. Open Leo, leave the Sam / UT / cheer note, tap **Write the checklist**, then **Hold $28**. That broadcast is a real devnet transaction. **Continue** switches the phone to Leo. **Fill a take that passes** and **Send it**. The checklist goes green. **View receipt** is the share card, and **View on explorer** opens the release transaction. **Fill a take that misses** leaves the money held, and **Try another take** sends it again. The seeded feed jobs are put on devnet the first time the app starts, so their receipts have explorer links too.
+
+![Release transaction](media/explorer.png)
 
 Switch people from the face at the top left. Eden's Northroom board is the same hold, assigned by a studio.
 
@@ -75,7 +77,7 @@ cp .env.example .env
 npm start
 ```
 
-Open http://localhost:5173. Empty `.env` is fine: local judge, no X posts, in-process ledger until the program is on devnet.
+Open http://localhost:5173. Empty `.env` is fine: local judge, no X posts, and devnet through the public RPC. The program is already deployed, so hold and release are real transactions.
 
 ```sh
 npm run test:app
