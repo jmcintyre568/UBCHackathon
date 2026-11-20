@@ -44,16 +44,21 @@ flowchart LR
 
 Devnet keys, the fee payer, and a later mainnet swap are in [SETUP.md](SETUP.md). This program is a hackathon build. Do not put real funds in it.
 
-## Live on devnet
+### Live on devnet
 
-| What | Link |
-| --- | --- |
-| Program | [DN664BTn…Mgvh](https://explorer.solana.com/address/DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh?cluster=devnet) |
-| Deploy | [5EMFD5NQ…Ud76](https://explorer.solana.com/tx/5EMFD5NQbimXVp15RgfHbnkFpa1iphAuTm7EXhyiQFPbcRZ4iiDbfBiAcnSVENV3B7vVFbjd4Qypi28aryJdUd76?cluster=devnet) |
-| Hold $28 (`create_escrow` + `fund_escrow`) | [4GgXFTgU…9MhN](https://explorer.solana.com/tx/4GgXFTgUymLrAT3w3pL1oUksXUXHkP5fwbmDiHSmA2qUN48CE5Hp9phEhaAJJzargDavqN7S9xoHytU9F5A49MhN?cluster=devnet) |
-| Release after the judge passes (`submit_milestone` + `approve_milestone`) | [xayQLNcg…MmT7](https://explorer.solana.com/tx/xayQLNcgCYuDUAqjWoTtBSmstoEgWhzG4MzdrU5dzJP8SJz3s1vAQo8x7qLSCdQBKKxMsvzb1ogJ8ZyAtEQMmT7?cluster=devnet) |
+The program is deployed at [`DN664BTn…Mgvh`](https://explorer.solana.com/address/DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh?cluster=devnet). One $28 shoutout, end to end:
 
-Every transaction is signed by the buyer's or creator's embedded wallet and paid for by the app's fee payer, `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`. Each one carries a `holler …` memo so a QuickNode Stream can pick it up.
+- Deploy: [5EMFD5NQ…Ud76](https://explorer.solana.com/tx/5EMFD5NQbimXVp15RgfHbnkFpa1iphAuTm7EXhyiQFPbcRZ4iiDbfBiAcnSVENV3B7vVFbjd4Qypi28aryJdUd76?cluster=devnet)
+- Hold: [`create_escrow` + `fund_escrow`](https://explorer.solana.com/tx/5nVMigXDygQE2XaBustrceY9UAAaUphKMJE2k3qgSoSo1Kbb8KW66U1KtNbBVHh2TE5n7VHDTqGuJTGVxYzLGhJf?cluster=devnet)
+- Release: [`submit_milestone` + `approve_milestone`](https://explorer.solana.com/tx/v6Y57u5o3npPszB3babbtMeqBCRh617jpJCZWXw9C5bDkKuLfRn7WFosKnATCRKbx7JqiWoE9rvryuVSAUmAwam?cluster=devnet)
+
+Each transaction carries a `holler <action> escrow=… cents=…` memo, which is what the QuickNode filter reads.
+
+### What keeps it honest
+
+- **The judge can't be talked into paying.** The creator's delivery is treated as data, not instructions. Grok is told that a claim about the work ("it's 30 seconds") isn't the work. Text that tries to steer the judge holds the money, and the local rules can still veto a banned topic after Grok passes it (`server/store.mjs`, `guard`).
+- **Keys stay off GitHub.** The fee payer, which is also the program's upgrade authority, is a random keypair in `data/` (gitignored). Embedded wallets are derived from a per-machine secret in `data/wallet-secret`. Nothing in the repo rebuilds either.
+- **The live feed only trusts the program.** The QuickNode filter keeps successful transactions that call the escrow program, not any transaction with a "holler" memo. The webhooks need `HOLLER_HOOK_SECRET`, and without it they only answer calls from the same machine.
 
 ## Demo
 

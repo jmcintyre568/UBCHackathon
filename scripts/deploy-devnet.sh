@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build trustlancer_escrow and deploy it to Solana devnet.
-# The demo program key and fee payer are derived in this script so a fresh
-# checkout can deploy the same program id. Do not use these keys on mainnet.
+# The program address comes from a fixed label so every checkout targets the
+# same program id. That key only claims the address. The fee payer, which is
+# also the upgrade authority, is random and stays in data/ (gitignored).
 set -euo pipefail
 
 export PATH="${HOME}/.local/share/solana/install/active_release/bin:${HOME}/.cargo/bin:${PATH}"
@@ -10,21 +11,33 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 mkdir -p target/deploy data
 
-# Same keys as Keypair.fromSeed(sha256(label)) in server/chain.mjs. Plain
+# The program key comes from a public label so every checkout targets the same
+# program id. The fee payer is random and never derived from a label. Plain
 # node:crypto, so this runs on any Node 18+ without npm install.
 node --input-type=module <<'EOF'
-import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { createHash, createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-function writeKey(name, label) {
-  const seed = createHash("sha256").update(label).digest();
+function keypairBytes(seed) {
   const pkcs8 = Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]);
   const spki = createPublicKey(createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" })).export({ format: "der", type: "spki" });
-  writeFileSync(name, JSON.stringify(Array.from(Buffer.concat([seed, spki.subarray(-32)]))));
+  return Buffer.concat([seed, spki.subarray(-32)]);
 }
+const fromLabel = (label) => keypairBytes(createHash("sha256").update(label).digest());
 
-writeKey("target/deploy/trustlancer_escrow-keypair.json", "holler-devnet-demo-program-v1");
-writeKey("data/fee-payer.json", "holler-fee-payer-v1");
+writeFileSync("target/deploy/trustlancer_escrow-keypair.json", JSON.stringify(Array.from(fromLabel("holler-devnet-demo-program-v1"))));
+
+// The first version derived the fee payer from this public label. Never reuse it.
+const legacy = fromLabel("holler-fee-payer-v1").subarray(32);
+if (existsSync("data/fee-payer.json")) {
+  const kept = Buffer.from(JSON.parse(readFileSync("data/fee-payer.json", "utf8")));
+  if (kept.subarray(32).equals(legacy)) {
+    console.error("data/fee-payer.json is the old public demo key. Run scripts/rotate-fee-payer.sh first.");
+    process.exit(1);
+  }
+} else {
+  writeFileSync("data/fee-payer.json", JSON.stringify(Array.from(keypairBytes(randomBytes(32)))), { mode: 0o600 });
+}
 EOF
 echo "PROGRAM   $(solana address -k target/deploy/trustlancer_escrow-keypair.json)"
 echo "FEE_PAYER $(solana address -k data/fee-payer.json)"
@@ -85,6 +98,7 @@ echo "Deploying to devnet..."
 solana program deploy target/deploy/trustlancer_escrow.so \
   --program-id target/deploy/trustlancer_escrow-keypair.json \
   --keypair data/fee-payer.json \
+  --upgrade-authority data/fee-payer.json \
   --url "$rpc"
 
 echo "Deployed. Start the app with npm start. The fee payer signs every transaction."

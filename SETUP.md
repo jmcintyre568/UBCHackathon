@@ -39,10 +39,10 @@ bash scripts/deploy-devnet.sh
 
 The script writes two gitignored keys:
 
-- `target/deploy/trustlancer_escrow-keypair.json` from the label `holler-devnet-demo-program-v1`
-- `data/fee-payer.json` from the label `holler-fee-payer-v1`
+- `target/deploy/trustlancer_escrow-keypair.json` from the label `holler-devnet-demo-program-v1`. It only claims the program address, so every checkout targets the same id. Once the program exists, only the upgrade authority can change it.
+- `data/fee-payer.json`, a random keypair made the first time. It pays every fee and is the program's upgrade authority. Back it up and never commit it.
 
-It builds the program, checks the fee payer's balance, and deploys through public devnet. QuickNode endpoints refuse the large batches a deploy sends (HTTP 413), so `SOLANA_RPC_URL` is not used here. Set `DEPLOY_RPC_URL` to pick another endpoint. The public RPC faucet is closed, so the script stops and says how much SOL is missing. Use https://faucet.solana.com while signed in with GitHub and send it to the demo fee payer `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`. That faucet only serves GitHub accounts with some public repos. If yours is new, ask a teammate, or use https://faucet.quicknode.com/solana/devnet. A first deploy holds the program rent and a same-size buffer at once, about 2.6 SOL for this build. Request 5 SOL so the app has room for its own transactions. Then run the script again.
+It builds the program, checks the fee payer's balance, and deploys through public devnet. QuickNode endpoints refuse the large batches a deploy sends (HTTP 413), so `SOLANA_RPC_URL` is not used here. Set `DEPLOY_RPC_URL` to pick another endpoint. The public RPC faucet is closed, so the script stops and says how much SOL is missing. Use https://faucet.solana.com while signed in with GitHub and send it to the fee payer address the script prints. That faucet only serves GitHub accounts with some public repos. If yours is new, ask a teammate, or use https://faucet.quicknode.com/solana/devnet. A first deploy holds the program rent and a same-size buffer at once, about 2.6 SOL for this build. Request 5 SOL so the app has room for its own transactions. Then run the script again.
 
 Check it is live:
 
@@ -51,6 +51,16 @@ solana program show DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh --url devnet --
 ```
 
 `npm start` should print `program deployed`. On that first start, the seeded feed jobs are also put on devnet in the background, so their receipts get signatures too.
+
+### Deployed before Nov 20? Rotate the fee payer once
+
+The first version derived the fee payer from the public label `holler-fee-payer-v1` (address `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`). Anyone with the repo could rebuild it, and it is the program's upgrade authority. On the machine that deployed, run:
+
+```sh
+./scripts/rotate-fee-payer.sh
+```
+
+It makes a random `data/fee-payer.json`, hands it the upgrade authority, and moves the old key's SOL to it. Then restart `npm start` and reset the demo once (`curl -X POST http://localhost:5173/api/demo/reset`). The server makes a new demo mint for the new fee payer, and the embedded wallets move to keys derived from `data/wallet-secret`.
 
 `npm start` then talks to `https://api.devnet.solana.com` unless `SOLANA_RPC_URL` is set. On first use it creates a 6-decimal demo mint, saves it in `data/cluster.json`, and mints a balance to the embedded buyer wallets. The fee payer is the Solana fee payer on every transaction and also tops up an embedded wallet when that wallet has to pay rent. The program still names the client as the rent payer, which is how this version of the program is written. The person using the app does not hold SOL and does not see a seed phrase.
 
@@ -139,10 +149,10 @@ When a stream delivery matches an escrow account, the receipt is marked from Qui
 Do this only after the devnet demo is boringly reliable. Do not reuse the demo keys.
 
 1. Generate a new program keypair. Do not use `holler-devnet-demo-program-v1`. Put the new pubkey in `declare_id!` and in `Anchor.toml`, then rebuild.
-2. Create `FEE_PAYER_KEYPAIR` pointing at a fresh JSON keypair funded with real SOL. On `SOLANA_CLUSTER=mainnet-beta` the server refuses the demo fee-payer seed.
+2. Create `FEE_PAYER_KEYPAIR` pointing at a fresh JSON keypair funded with real SOL. On `SOLANA_CLUSTER=mainnet-beta` the server won't generate one for you.
 3. Set `USDC_MINT=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`. The server will not mint on mainnet.
 4. Point `SOLANA_RPC_URL` at a QuickNode mainnet endpoint and create a mainnet Stream with the same filter, after you change `PROGRAM` inside `quicknode/filter.js` to the new program id.
-5. Replace `keypairFor()` in `server/chain.mjs` with Privy, Phantom embedded, or Web3Auth. The instruction builder in `server/escrow.mjs` can stay. The demo derivation is public, because the seed is in the source, so it must not hold real balances.
+5. Replace `keypairFor()` in `server/chain.mjs` with Privy, Phantom embedded, or Web3Auth. The instruction builder in `server/escrow.mjs` can stay. The demo wallets are server-held keys derived from `data/wallet-secret`, so whoever runs the server controls them. They must not hold real balances.
 6. Move the program upgrade authority to a multisig. Get an audit before anyone else's money can land in it.
 
 The product behavior does not change between clusters: dollars on screen, the app pays the network fee, and the receipt links to the explorer. Mainnet links omit `?cluster=devnet`.
@@ -168,6 +178,7 @@ SOLANA_RPC_URL
 DEPLOY_RPC_URL
 USDC_MINT
 FEE_PAYER_KEYPAIR
+HOLLER_WALLET_SECRET
 HOLLER_SKIP_CHAIN
 HOLLER_SKIP_X
 ```
