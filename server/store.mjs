@@ -322,18 +322,55 @@ export async function sampleJob(userId, jobId, mode) {
   });
 }
 
+// Text that tries to steer the judge instead of being the work.
+const STEERING = [
+  /ignore (all |any |the |your )?(previous |prior |above )?(instructions|checklist|rules|requirements)/i,
+  /mark (every|all|each)( line| item| requirement)?s? (as )?(met|passed|complete)/i,
+  /"?passed"?\s*[:=]\s*true/i,
+  /you are (now )?(the )?(judge|grader)/i,
+  /system prompt/i,
+];
+
+function steering(text) {
+  return STEERING.some((pattern) => pattern.test(text));
+}
+
+// Grok decides, but two local checks can still hold the money: text that tries
+// to steer the judge, and a banned topic the local rules can see.
+function guard(verdict, job, text) {
+  if (steering(text)) {
+    return {
+      ...verdict,
+      items: verdict.items.map((row) => ({ ...row, met: false, reason: "Not checked. The delivery tried to steer the judge." })),
+      passed: false,
+      summary: "The delivery tries to tell the judge what to decide, so the money stays held.",
+      flagged: "steering",
+    };
+  }
+  const local = evaluate(job.items, text);
+  const tripped = new Set(job.items
+    .filter((item) => item.rule?.type === "forbid")
+    .map((item) => item.id)
+    .filter((id) => local.items.find((row) => row.id === id)?.met === false));
+  if (!tripped.size) return verdict;
+  const items = verdict.items.map((row) => (tripped.has(row.id)
+    ? { ...row, met: false, reason: local.items.find((entry) => entry.id === row.id).reason }
+    : row));
+  return { ...verdict, items, passed: false, summary: "It brings up something the buyer asked to leave out." };
+}
+
 async function judgeJob(job, text) {
   if (grokConfigured()) {
     try {
-      return await grokJudge(job.brief, job.items, text);
+      return guard(await grokJudge(job.brief, job.items, text), job, text);
     } catch (error) {
       console.warn(`[holler] grok judge fallback (${error.message})`);
-      const verdict = evaluate(job.items, text);
+      const verdict = guard(evaluate(job.items, text), job, text);
       verdict.fallback = true;
       return verdict;
     }
   }
-  return evaluate(job.items, text);
+  return guard(evaluate(job.items, text), job, text);
 }
 
 function sceneFor(job) {
