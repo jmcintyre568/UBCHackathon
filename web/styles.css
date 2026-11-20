@@ -851,3 +851,25 @@ a.btn, a.job, a.home-cta, a.story, a.deal, a.banner { text-decoration: none; }
 }
 .share-actions button:hover { background: #262c3f; }
 .share-actions button:first-child { background: #fff; border-color: #fff; color: #101218; }
+
+/* Checklist lines not judged yet show an empty ring instead of a dot. */
+.check:not(.ok):not(.no) .tick {
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  color: transparent;
+}
+
+/* Money released: green amount and a bigger confetti burst. */
+.hero-money.won { color: var(--green); text-shadow: 0 0 32px rgba(29, 255, 138, 0.45); }
+.burst i { left: 22%; top: 56px; width: 9px; height: 9px; animation-duration: 1.1s; }
+.burst i:nth-child(3n) { background: var(--yellow, #ffd84d); border-radius: 2px; }
+.burst i:nth-child(4n) { background: var(--blue); }
+@keyframes burst {
+  0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(-1 * var(--r, 90px))) scale(0.6); }
+}
+
+/* Ask screen: who you're asking, with room before the offers. */
+.ask-head { display: flex; align-items: center; gap: 14px; margin: 4px 0 16px; }
+.ask-head .display { margin: 0; font-size: 34px; line-height: 1; }
+.ask-head .kicker { margin: 4px 0 0; }
