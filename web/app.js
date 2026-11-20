@@ -167,7 +167,7 @@ function tabbar() {
 }
 
 function frame({ back, title, body, dock = "", tabs = !back }) {
-  return `${back ? backbar(back, title) : appbar()}<main class="view" id="view">${body}</main>${dock}${tabs ? tabbar() : ""}<div id="toast" role="status"></div><div id="sheet" hidden></div>`;
+  return `${back ? backbar(back, title) : appbar()}<main class="view" id="view">${body}</main>${dock}${tabs ? tabbar() : ""}<div id="toast" class="toast" role="status"></div><div id="sheet" hidden></div>`;
 }
 
 function banner() {
@@ -310,7 +310,7 @@ function renderAsk(id) {
     title: creator.first,
     tabs: false,
     dock,
-    body: `<p class="kicker">${esc(creator.city)}</p><h2 class="display" style="font-size:34px">${esc(creator.first)}</h2>
+    body: `<div class="ask-head">${avatar(creator, "lg")}<div><h2 class="display">${esc(creator.first)}</h2><p class="kicker">${esc(creator.city)}</p></div></div>
       <div class="chips">${creator.offers.map((entry) => `<button class="chip ${entry.id === offer.id ? "on" : ""}" type="button" data-act="offer" data-offer="${entry.id}">${esc(entry.title)} · ${money(entry.priceCents)}</button>`).join("")}</div>
       <label class="kicker" for="brief">What do you want?</label>
       <textarea id="brief" placeholder="Plain words are enough."></textarea>
@@ -406,7 +406,7 @@ function renderJob(id) {
   const [label, tone] = statusMeta(job.status);
   const passed = job.verdict?.passed;
   const burst = local.celebrate === job.id && job.status === "released"
-    ? `<div class="burst">${Array.from({ length: 10 }, (_, i) => `<i style="--a:${i * 36}deg;--d:${i * 0.03}s"></i>`).join("")}</div>`
+    ? `<div class="burst">${Array.from({ length: 18 }, (_, i) => `<i style="--a:${i * 20}deg;--d:${(i % 6) * 0.04}s;--r:${70 + (i % 3) * 30}px"></i>`).join("")}</div>`
     : "";
   let actions = "";
   let dock = "";
@@ -450,7 +450,7 @@ function renderJob(id) {
     title: job.title,
     tabs: false,
     dock,
-    body: `${burst}<p class="tag ${tone}">${label}</p><div class="hero-money">${money(job.amountCents)}</div><h2 style="margin:0 0 8px">${esc(headline)}</h2><p class="lede">${esc(job.status === "flagged" || job.status === "released" ? sub : job.brief)}</p>
+    body: `${burst}<p class="tag ${tone}">${label}</p><div class="hero-money ${job.status === "released" ? "won" : ""}">${money(job.amountCents)}</div><h2 style="margin:0 0 8px">${esc(headline)}</h2><p class="lede">${esc(job.status === "flagged" || job.status === "released" ? sub : job.brief)}</p>
       ${job.verdict ? `<p class="fine">${esc(judgeLabel(job.verdict))}. ${esc(job.verdict.summary)}</p>` : ""}
       ${checklistView(job, job.verdict)}
       ${mediaView(job.reference, "Reference")}
