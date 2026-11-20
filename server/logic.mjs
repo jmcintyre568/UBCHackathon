@@ -264,13 +264,22 @@ export function evaluate(items, text) {
   return { passed: open.length === 0, summary, items: results, engine: "demo" };
 }
 
+const PROFANE = /fuck|shit|damn|bitch|crap|cunt|dick|piss|bastard|\bass\b|\bhell\b/i;
+
+function covered(item) {
+  return `Covered: ${item.text.charAt(0).toLowerCase()}${item.text.slice(1).replace(/[.!]+$/, "")}.`;
+}
+
 export function sampleFor(items, mode, ctx = {}) {
   const kind = ctx.kind === "shoutout" ? "shoutout" : "work";
   if (mode === "fail") {
     let text = kind === "shoutout"
       ? "Hey, happy birthday. Have a good one. I made a joke about you being late."
       : "Done. I will send a file later.";
-    const terms = items.filter((item) => item.rule.type === "forbid").flatMap((item) => item.rule.terms);
+    // Grok can list swear words as forbidden terms. The sample still misses the
+    // other lines, so don't put those on screen.
+    const terms = items.filter((item) => item.rule.type === "forbid").flatMap((item) => item.rule.terms)
+      .filter((term) => !PROFANE.test(term));
     for (const term of terms) {
       if (!norm(text).includes(term)) text += ` ${term}`;
     }
@@ -284,16 +293,20 @@ export function sampleFor(items, mode, ctx = {}) {
   const name = (ctx.creatorName || "").split(" ")[0];
   if (name) lines.push(`${name} here.`);
   for (const item of items) {
-    if (item.rule.type === "include" && item.rule.terms?.length) {
-      lines.push(`I included ${humanList(item.rule.terms)}.`);
+    if (item.rule.type === "include") {
+      // Say the line itself, so counts and short names like "UT" survive.
+      // Terms the wording doesn't carry are added for the local judge.
+      const missing = (item.rule.terms || []).filter((term) => !hasTerm(norm(item.text), term));
+      lines.push(missing.length ? `${covered(item)} I included ${humanList(missing)}.` : covered(item));
     } else if (item.rule.type === "tone" && item.rule.terms?.length) {
       lines.push(`I kept the tone ${humanList(item.rule.terms)}.`);
     } else if (item.rule.type === "duration") {
       lines.push(`The cut is ${item.rule.seconds} seconds long.`);
     } else if (item.rule.type === "present") {
       lines.push(kind === "shoutout"
-        ? "I am speaking on camera, straight to you."
+        ? "I am speaking on camera, straight to you. The video is attached."
         : "The finished work is attached and ready to use.");
+      lines.push(covered(item));
     }
   }
   return { text: lines.join(" "), cardLine };

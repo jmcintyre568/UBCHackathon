@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 // QuickNode Streams posts matching transactions here. The same parser also
 // accepts a plain event, so a local ledger and a stream fill one live feed.
 
@@ -29,26 +31,38 @@ function explicit(node) {
   };
 }
 
+// A stream transaction carries its signature next to the memo log, not in it.
+function txSignature(node) {
+  const signatures = node.transaction?.signatures || node.signatures;
+  const first = Array.isArray(signatures) ? signatures[0] : null;
+  return typeof first === "string" ? first : null;
+}
+
 export function parseStreamBody(body) {
   const found = [];
-  const walk = (node) => {
+  const walk = (node, signature) => {
     if (node == null) return;
     if (typeof node === "string") {
       const match = node.match(MEMO);
-      if (match) found.push(fromMemo(match[1], match[2] || ""));
+      if (match) {
+        const event = fromMemo(match[1], match[2] || "");
+        event.signature = event.signature || signature;
+        found.push(event);
+      }
       return;
     }
     if (Array.isArray(node)) {
-      node.forEach(walk);
+      node.forEach((child) => walk(child, signature));
       return;
     }
     if (typeof node === "object") {
+      const own = txSignature(node) || signature;
       const event = explicit(node);
       if (event) found.push(event);
-      Object.values(node).forEach(walk);
+      Object.values(node).forEach((child) => walk(child, own));
     }
   };
-  walk(body);
+  walk(body, null);
   const seen = new Set();
   return found.filter((event) => {
     const key = `${event.action}:${event.signature || ""}:${event.escrow || ""}:${event.cents || ""}`;
@@ -58,8 +72,19 @@ export function parseStreamBody(body) {
   });
 }
 
+function hookSecret() {
+  return process.env.HOLLER_HOOK_SECRET || process.env.QUICKNODE_WEBHOOK_SECRET || "";
+}
+
+export function hookSecretSet() {
+  return Boolean(hookSecret());
+}
+
+// With no secret set, callers must also be local (see hookOk in index.mjs).
 export function hookAuthorized(header) {
-  const secret = process.env.HOLLER_HOOK_SECRET || process.env.QUICKNODE_WEBHOOK_SECRET || "";
+  const secret = hookSecret();
   if (!secret) return true;
-  return String(header || "") === secret;
+  const given = Buffer.from(String(header || ""));
+  const expected = Buffer.from(secret);
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }

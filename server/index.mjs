@@ -4,10 +4,11 @@ import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureChain, stopChain } from "./chain.mjs";
-import { hookAuthorized } from "./streams.mjs";
+import { hookAuthorized, hookSecretSet } from "./streams.mjs";
 import { startMentionPoll } from "./mentions.mjs";
 import {
   askFromMention,
+  backfillSeed,
   bootstrap,
   engineStatus,
   freezeJob,
@@ -54,7 +55,11 @@ async function readJson(req, limit = 800_000) {
 
 function hookOk(req) {
   const header = req.headers["x-holler-secret"] || String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  return hookAuthorized(header);
+  if (hookSecretSet()) return hookAuthorized(header);
+  // No secret: only accept calls made on this machine. Tunnels such as ngrok
+  // arrive from loopback but add x-forwarded-for, so they are refused too.
+  const local = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
+  return local && !req.headers["x-forwarded-for"];
 }
 
 function userId(req) {
@@ -75,6 +80,7 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && path === "/api/demo/reset") {
     await resetState();
     send(res, 200, { ok: true });
+    backfillSeed().catch(() => {});
     return;
   }
   if (req.method === "POST" && (path === "/api/hooks/quicknode" || path === "/api/hooks/x")) {
@@ -169,6 +175,9 @@ if (isMain) {
   console.log(`holler → http://localhost:${shown.port}`);
   const engine = engineStatus();
   console.log(`judge: ${engine.judge} · ledger: ${engine.chain} · streams: ${engine.streams} · announcements: ${engine.announce}`);
+  backfillSeed().then((count) => {
+    if (count) console.log(`[holler] ${count} seeded holds now have ${engine.chain} signatures`);
+  });
   startMentionPoll(async (mention) => {
     try {
       const job = await askFromMention(mention);

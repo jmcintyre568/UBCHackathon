@@ -44,6 +44,22 @@ flowchart LR
 
 Devnet keys, the fee payer, and a later mainnet swap are in [SETUP.md](SETUP.md). This program is a hackathon build. Do not put real funds in it.
 
+### Live on devnet
+
+The program is deployed at [`DN664BTn…Mgvh`](https://explorer.solana.com/address/DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh?cluster=devnet). One $28 shoutout, end to end:
+
+- Deploy: [5EMFD5NQ…Ud76](https://explorer.solana.com/tx/5EMFD5NQbimXVp15RgfHbnkFpa1iphAuTm7EXhyiQFPbcRZ4iiDbfBiAcnSVENV3B7vVFbjd4Qypi28aryJdUd76?cluster=devnet)
+- Hold: [`create_escrow` + `fund_escrow`](https://explorer.solana.com/tx/5nVMigXDygQE2XaBustrceY9UAAaUphKMJE2k3qgSoSo1Kbb8KW66U1KtNbBVHh2TE5n7VHDTqGuJTGVxYzLGhJf?cluster=devnet)
+- Release: [`submit_milestone` + `approve_milestone`](https://explorer.solana.com/tx/v6Y57u5o3npPszB3babbtMeqBCRh617jpJCZWXw9C5bDkKuLfRn7WFosKnATCRKbx7JqiWoE9rvryuVSAUmAwam?cluster=devnet)
+
+Each transaction carries a `holler <action> escrow=… cents=…` memo, which is what the QuickNode filter reads.
+
+### What keeps it honest
+
+- **The judge can't be talked into paying.** The creator's delivery is treated as data, not instructions. Grok is told that a claim about the work ("it's 30 seconds") isn't the work. Text that tries to steer the judge holds the money, and the local rules can still veto a banned topic after Grok passes it (`server/store.mjs`, `guard`).
+- **Keys stay off GitHub.** The fee payer, which is also the program's upgrade authority, is a random keypair in `data/` (gitignored). Embedded wallets are derived from a per-machine secret in `data/wallet-secret`. Nothing in the repo rebuilds either.
+- **The live feed only trusts the program.** The QuickNode filter keeps successful transactions that call the escrow program, not any transaction with a "holler" memo. The webhooks need `HOLLER_HOOK_SECRET`, and without it they only answer calls from the same machine.
+
 ## Demo
 
 [46-second walkthrough](media/holler-demo.mp4): scroll the feed, ask Leo for a shoutout, hold $28 on devnet, watch the judge check each line, open the receipt's explorer link, then the You page.
@@ -52,7 +68,7 @@ Devnet keys, the fee payer, and a later mainnet swap are in [SETUP.md](SETUP.md)
 | --- | --- | --- | --- |
 | ![Home feed](media/feed-top.png) | ![Flagged recap on the feed](media/feed-scrolled.png) | ![Released checklist](media/released.png) | ![Share card](media/receipt.png) |
 
-On a fresh start you are Maya. Open Leo, leave the Sam / UT / cheer note, tap **Write the checklist**, then **Hold $28**. That broadcast is a real devnet transaction. **Continue** switches the phone to Leo. **Fill a take that passes** and **Send it**. The checklist goes green. **View receipt** is the share card, and **View on explorer** opens the release transaction. **Fill a take that misses** leaves the money held.
+On a fresh start you are Maya. Open Leo, leave the Sam / UT / cheer note, tap **Write the checklist**, then **Hold $28**. That broadcast is a real devnet transaction. **Continue** switches the phone to Leo. **Fill a take that passes** and **Send it**. The checklist goes green. **View receipt** is the share card, and **View on explorer** opens the release transaction. **Fill a take that misses** leaves the money held, and **Try another take** sends it again. The seeded feed jobs are put on devnet the first time the app starts, so their receipts have explorer links too.
 
 ![Release transaction](media/explorer.png)
 

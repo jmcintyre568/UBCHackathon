@@ -99,12 +99,19 @@ export async function ensureMint(buyerIds = []) {
   const feePayer = await feePayerKeypair();
   const saved = loadConfig();
   if (!mintKey) {
-    if (saved.mint && saved.cluster === chainMode()) {
+    // A mint made by an earlier fee payer can't be minted to by this one.
+    if (saved.mint && saved.cluster === chainMode() && saved.mintAuthority === feePayer.publicKey.toBase58()) {
       const { PublicKey } = await import("@solana/web3.js");
       mintKey = new PublicKey(saved.mint);
     } else {
       mintKey = await createMint(connection, feePayer, feePayer.publicKey, null, 6);
-      saveConfig({ ...saved, cluster: chainMode(), mint: mintKey.toBase58(), programId: PROGRAM_ID });
+      saveConfig({
+        ...saved,
+        cluster: chainMode(),
+        mint: mintKey.toBase58(),
+        mintAuthority: feePayer.publicKey.toBase58(),
+        programId: PROGRAM_ID,
+      });
       console.log(`[holler] demo USDC mint ${mintKey.toBase58()}`);
     }
   }
@@ -204,7 +211,7 @@ export async function onFund({ escrowId, buyerId, creatorId, cents }) {
   return { cluster: chainMode(), signature, explorer: explorerUrl(signature, chainMode()) };
 }
 
-export async function onRelease({ escrowId, buyerId, creatorId, hash }) {
+export async function onRelease({ escrowId, buyerId, creatorId, hash, cents }) {
   await ensureChain();
   if (!programLive()) return offline();
   await web3();
@@ -237,7 +244,7 @@ export async function onRelease({ escrowId, buyerId, creatorId, hash }) {
       meta(TOKEN_PROGRAM_ID, false, false),
       meta(SystemProgram.programId, false, false),
     ], Buffer.concat([discriminator("approve_milestone"), Buffer.from([0])])),
-    memoIx(feePayer.publicKey, `holler release escrow=${derived.escrow} hash=${hash.slice(0, 16)}`),
+    memoIx(feePayer.publicKey, `holler release escrow=${derived.escrow}${cents ? ` cents=${cents}` : ""} hash=${hash.slice(0, 16)}`),
   ], [client, freelancer]);
   return { cluster: chainMode(), signature, explorer: explorerUrl(signature, chainMode()) };
 }
@@ -292,6 +299,23 @@ export async function onFreeze({ escrowId, buyerId, actorId }) {
     memoIx(feePayer.publicKey, `holler freeze escrow=${derived.escrow}`),
   ], [actor]);
   return { cluster: chainMode(), signature, explorer: explorerUrl(signature, chainMode()) };
+}
+
+// Signatures that touched an escrow account, oldest first. null when the
+// account was never created. An RPC without address history returns [].
+export async function escrowHistory(escrowPda) {
+  await ensureChain();
+  if (!programLive()) return null;
+  const { PublicKey } = await web3();
+  const connection = getConnection();
+  const info = await connection.getAccountInfo(new PublicKey(escrowPda));
+  if (!info) return null;
+  const rows = await connection.getSignaturesForAddress(new PublicKey(escrowPda), { limit: 20 });
+  return rows.filter((row) => !row.err).reverse().map((row) => ({
+    cluster: chainMode(),
+    signature: row.signature,
+    explorer: explorerUrl(row.signature, chainMode()),
+  }));
 }
 
 export function encodeForTest() {
