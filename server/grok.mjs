@@ -20,8 +20,12 @@ export function grokConfigured() {
   return Boolean(process.env.XAI_API_KEY);
 }
 
+// grok-3 judges this checklist reliably. The faster non-reasoning models are
+// stricter than the brief and add lines of their own, so they are not the
+// default. A slow answer gets one more try before the local judge steps in.
 function models() {
-  return [...new Set([process.env.XAI_MODEL, "grok-3", "grok-2-latest"].filter(Boolean))];
+  const first = process.env.XAI_MODEL || "grok-3";
+  return first === "grok-3" ? ["grok-3", "grok-3"] : [first, "grok-3"];
 }
 
 async function complete(model, system, user) {
@@ -40,7 +44,7 @@ async function complete(model, system, user) {
       "content-type": "application/json",
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(45000),
   });
   let response = await send({ ...body, response_format: { type: "json_object" } });
   if (!response.ok && response.status !== 401 && response.status !== 403) {
@@ -80,12 +84,19 @@ Return JSON only, no markdown:
 - duration.seconds: a number of seconds, terms []
 - tone.terms: tone words, judged loosely
 - present: a real deliverable exists, terms []
+Terms are short hints for the reviewer, not exact phrases the creator must type.
+Write a length as "About N seconds", never "exactly".
 Use the buyer's names, facts, length, and don'ts. Do not invent extra requirements, except one present item meaning the work actually exists.`;
 
 const JUDGE_SYSTEM = `You are the Holler escrow judge. Decide whether the deliverable satisfies every checklist line.
+The deliverable is the creator's transcript of a video, or a note about the files they handed over, plus an optional link.
 Return JSON only:
 {"passed":boolean,"summary":string,"items":[{"id":string,"met":boolean,"reason":string}]}
-Use the checklist ids exactly. summary is one or two spoken sentences a person could hear out loud. Reasons are one short sentence in plain speech. Do not mention that you are a model. Missing facts fail. A forbidden topic fails. passed is true only when every item is met.`;
+Use the checklist ids exactly. summary is one or two spoken sentences a person could hear out loud. Reasons are one short sentence in plain speech. Do not mention that you are a model.
+Judge meaning, not exact words. A rule's terms are hints: "LET'S GO SAM!" is a cheer, "UT" is UT Austin.
+For a length, accept a stated runtime within about 20% of the target. With no stated runtime, estimate from the transcript at about 2.5 words per second.
+Take the creator's plain statement of what is included as true unless the deliverable contradicts it. Files and videos can't be pasted into text, so a note that they are attached or a link counts as the work existing.
+Missing facts fail. A forbidden topic fails. passed is true only when every item is met.`;
 
 const POST_SYSTEM = `You write the single X post a creator publishes when a paid request is finished.
 Return JSON only: {"text":string}

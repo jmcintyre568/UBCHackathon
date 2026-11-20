@@ -81,6 +81,14 @@ describe("integrations", () => {
     assert.equal(events[0].action, "release");
     assert.equal(events[0].cents, 2800);
     assert.equal(events[0].source, "quicknode");
+    const streamed = parseStreamBody({
+      transactions: [{
+        transaction: { signatures: ["5wHu1qwD7q4sRkqvGfP6s1ZkR8b9d9GhK3iZ4mY2xV3s"] },
+        meta: { logMessages: ['Program log: Memo (len 60): "holler fund escrow=A26LSeed111111111111111111111111111 cents=2800"'] },
+      }],
+    });
+    assert.equal(streamed.length, 1);
+    assert.equal(streamed[0].signature, "5wHu1qwD7q4sRkqvGfP6s1ZkR8b9d9GhK3iZ4mY2xV3s");
     const previous = process.env.HOLLER_HOOK_SECRET;
     process.env.HOLLER_HOOK_SECRET = "s3cret";
     assert.equal(hookAuthorized("s3cret"), true);

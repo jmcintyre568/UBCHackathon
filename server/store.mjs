@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { announceMode, announceRelease } from "./announce.mjs";
 import { chainMode, deriveEscrow, explorerUrl, PROGRAM_ID, programLive, pubkeyFor } from "./chain.mjs";
-import { onFreeze, onFund, onRefund, onRelease } from "./escrow.mjs";
+import { escrowHistory, onFreeze, onFund, onRefund, onRelease } from "./escrow.mjs";
 import { draftAnnouncement, grokChecklist, grokConfigured, grokJudge } from "./grok.mjs";
 import { parseAskMention } from "./mentions.mjs";
 import { parseStreamBody } from "./streams.mjs";
@@ -387,18 +387,20 @@ async function publish(job) {
 
 async function releaseJob(job) {
   if (job.escrow.status !== "active") throw new Error("This hold can't be released now.");
-  job.escrow.milestone = "paid";
-  job.escrow.status = "completed";
-  job.escrow.releasedCents = job.amountCents;
-  job.escrow.hash = job.deliverable?.hash || null;
+  const hash = job.deliverable?.hash || null;
+  // Touch the hold only after the transaction lands, so a failed send can be retried.
   const releaseEvent = await note("release", {
     escrowId: job.escrow.id,
     buyerId: job.buyerId,
     creatorId: job.creatorId,
-    hash: job.escrow.hash,
+    hash,
     cents: job.amountCents,
     escrowPda: job.escrow.pda,
   });
+  job.escrow.milestone = "paid";
+  job.escrow.status = "completed";
+  job.escrow.releasedCents = job.amountCents;
+  job.escrow.hash = hash;
   const submitEvent = [...job.escrow.events].reverse().find((event) => event.action === "submit");
   if (submitEvent && releaseEvent.signature) {
     submitEvent.signature = releaseEvent.signature;
@@ -580,15 +582,16 @@ export async function retryJob(userId, jobId) {
 async function finishRefund(job) {
   if (job.escrow.releasedCents > 0) throw new Error("This one already paid out.");
   if (!["active", "disputed"].includes(job.escrow.status)) throw new Error("This hold can't be returned.");
-  job.escrow.status = "cancelled";
-  job.status = "refunded";
-  job.escrow.events.push(await note("refund", {
+  const event = await note("refund", {
     escrowId: job.escrow.id,
     buyerId: job.buyerId,
     creatorId: job.creatorId,
     cents: job.amountCents,
     escrowPda: job.escrow.pda,
-  }));
+  });
+  job.escrow.status = "cancelled";
+  job.status = "refunded";
+  job.escrow.events.push(event);
 }
 
 export async function requestRefund(userId, jobId) {
@@ -611,17 +614,57 @@ export async function freezeJob(userId, jobId) {
   const job = jobById(jobId);
   if (me.id !== job.buyerId && me.id !== job.creatorId) throw new Error("You aren't on this ask.");
   if (job.escrow.status !== "active") throw new Error("This hold is already frozen or settled.");
-  job.escrow.status = "disputed";
-  job.status = "disputed";
-  job.escrow.events.push(await note("freeze", {
+  const event = await note("freeze", {
     escrowId: job.escrow.id,
     buyerId: job.buyerId,
     actorId: me.id,
     cents: job.amountCents,
     escrowPda: job.escrow.pda,
-  }));
+  });
+  job.escrow.status = "disputed";
+  job.status = "disputed";
+  job.escrow.events.push(event);
   save();
   return job;
+}
+
+function sign(event, chain) {
+  if (!event || !chain?.signature) return;
+  event.signature = chain.signature;
+  event.explorer = chain.explorer;
+  event.cluster = chain.cluster;
+  event.source = "solana";
+}
+
+// The seeded feed starts on the app ledger. Once the program is live, each
+// seeded hold goes on chain too, so every receipt has a signature. An escrow
+// account that already exists keeps the signatures it has.
+export async function backfillSeed() {
+  await getState();
+  if (!programLive()) return 0;
+  let filled = 0;
+  for (const job of state.jobs) {
+    if (job.escrow.events.some((event) => event.signature)) continue;
+    const fundEvent = job.escrow.events.find((event) => event.action === "fund");
+    const releaseEvent = job.escrow.events.find((event) => event.action === "release");
+    try {
+      const history = await escrowHistory(job.escrow.pda);
+      if (history) {
+        if (!history.length) continue;
+        sign(fundEvent, history[0]);
+        if (releaseEvent && history.length > 1) sign(releaseEvent, history.at(-1));
+      } else {
+        const parties = { escrowId: job.escrow.id, buyerId: job.buyerId, creatorId: job.creatorId };
+        sign(fundEvent, await onFund({ ...parties, cents: job.amountCents }));
+        if (releaseEvent) sign(releaseEvent, await onRelease({ ...parties, cents: job.amountCents, hash: job.escrow.hash || job.deliverable?.hash }));
+      }
+      filled += 1;
+      save();
+    } catch (error) {
+      console.warn(`[holler] seed ${job.id} stayed on the ledger (${error.message})`);
+    }
+  }
+  return filled;
 }
 
 export async function ensureWallet(user) {

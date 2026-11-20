@@ -8,6 +8,7 @@ import { hookAuthorized } from "./streams.mjs";
 import { startMentionPoll } from "./mentions.mjs";
 import {
   askFromMention,
+  backfillSeed,
   bootstrap,
   engineStatus,
   freezeJob,
@@ -75,6 +76,7 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && path === "/api/demo/reset") {
     await resetState();
     send(res, 200, { ok: true });
+    backfillSeed().catch(() => {});
     return;
   }
   if (req.method === "POST" && (path === "/api/hooks/quicknode" || path === "/api/hooks/x")) {
@@ -169,6 +171,9 @@ if (isMain) {
   console.log(`holler → http://localhost:${shown.port}`);
   const engine = engineStatus();
   console.log(`judge: ${engine.judge} · ledger: ${engine.chain} · streams: ${engine.streams} · announcements: ${engine.announce}`);
+  backfillSeed().then((count) => {
+    if (count) console.log(`[holler] ${count} seeded holds now have ${engine.chain} signatures`);
+  });
   startMentionPoll(async (mention) => {
     try {
       const job = await askFromMention(mention);

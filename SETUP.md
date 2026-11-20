@@ -28,13 +28,13 @@ Until the program is on devnet, holds are kept in the app ledger and the receipt
 
 ## 2. Deploy the escrow program to devnet
 
-You need Rust (1.85 or newer), the Solana CLI, and `cargo-build-sbf` from that CLI.
+You need Rust (1.85 or newer), a C compiler, Node 18 or newer, the Solana CLI, and `cargo-build-sbf` from that CLI. On Windows, run all of this inside WSL (Ubuntu): `sudo apt install build-essential nodejs`, then the two installers below.
 
 ```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
 # restart the shell so `solana` and `cargo-build-sbf` are on PATH
-chmod +x scripts/deploy-devnet.sh
-./scripts/deploy-devnet.sh
+bash scripts/deploy-devnet.sh
 ```
 
 The script writes two gitignored keys:
@@ -42,7 +42,15 @@ The script writes two gitignored keys:
 - `target/deploy/trustlancer_escrow-keypair.json` from the label `holler-devnet-demo-program-v1`
 - `data/fee-payer.json` from the label `holler-fee-payer-v1`
 
-It asks the devnet faucet for SOL and deploys the program. The public RPC faucet is closed, so use https://faucet.solana.com while signed in with GitHub. The demo fee payer is `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`. Request 2 SOL, twice if the deploy still says the account is short. Then run the script again.
+It builds the program, checks the fee payer's balance, and deploys. It reads `SOLANA_RPC_URL` from `.env` when it is set. The public RPC faucet is closed, so the script stops and says how much SOL is missing. Use https://faucet.solana.com while signed in with GitHub and send it to the demo fee payer `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`. A first deploy holds the program rent and a same-size buffer at once, about 2.6 SOL for this build. Request 5 SOL so the app has room for its own transactions. Then run the script again.
+
+Check it is live:
+
+```sh
+solana program show DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh --url devnet --keypair data/fee-payer.json
+```
+
+`npm start` should print `program deployed`. On that first start, the seeded feed jobs are also put on devnet in the background, so their receipts get signatures too.
 
 `npm start` then talks to `https://api.devnet.solana.com` unless `SOLANA_RPC_URL` is set. On first use it creates a 6-decimal demo mint, saves it in `data/cluster.json`, and mints a balance to the embedded buyer wallets. The fee payer is the Solana fee payer on every transaction and also tops up an embedded wallet when that wallet has to pay rent. The program still names the client as the rent payer, which is how this version of the program is written. The person using the app does not hold SOL and does not see a seed phrase.
 
@@ -60,7 +68,9 @@ XAI_MODEL=grok-3
 
 3. Restart `npm start`.
 
-The checklist and the verdict then come from Grok. If the call fails, the app uses the local judge and the screen says it fell back. The key stays on the server.
+The checklist and the verdict then come from Grok. A call can take 10 to 20 seconds. A slow call gets one retry. If that fails too, the app uses the local judge and the screen says it fell back. The key stays on the server.
+
+Keep `grok-3`. The faster non-reasoning models answer in a second or two, but in testing they rejected work that met the checklist and added lines the buyer never asked for.
 
 When a creator has posting turned on, Grok also drafts the X post. The You page toggle is **Posting finished asks**. Leo and Amina start with it on. Everyone else starts off. A release is never posted for a creator who left it off.
 
