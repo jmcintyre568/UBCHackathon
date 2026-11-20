@@ -99,6 +99,11 @@ For a length, accept a stated runtime within about 20% of the target. With no st
 A claim about what was said is not the work: "I said her name" only counts if the transcript shows it. Files and videos can't be pasted into text, so a note that they are attached or a link counts as the work existing.
 Missing facts fail. A forbidden topic fails. passed is true only when every item is met.`;
 
+const SAMPLE_SYSTEM = `You play the creator on Holler and write the delivery for a paid request.
+Return JSON only: {"text":string}
+text is the word-for-word transcript of what you say on camera, then one short note with the runtime and that the video is attached. For work that isn't a video, text is a short description of what you made, then a note that the file is attached, with no runtime.
+You are the creator, not the buyer: the buyer's family and friends are theirs, not yours. Cover every checklist line in the work itself, not by claiming it. Match a target length at about 2.5 words per second. Plain speech, no stage directions, no lists, no mention of the checklist or a judge.`;
+
 const POST_SYSTEM = `You write the single X post a creator publishes when a paid request is finished.
 Return JSON only: {"text":string}
 Rules: under 220 characters, first person, say who it was for and that it was paid, no hashtags, no more than one exclamation mark, no seed phrases, no token tickers.`;
@@ -133,6 +138,20 @@ export async function grokJudge(brief, items, deliverable) {
     items: results,
     engine: "grok",
   };
+}
+
+// The demo's "take that passes". The judge won't accept a list of claims, so
+// Grok writes the work the checklist asks for.
+export async function grokSample(brief, items, kind, creatorName) {
+  const raw = await grokJson(SAMPLE_SYSTEM, JSON.stringify({
+    creator: creatorName,
+    kind,
+    brief,
+    checklist: items.map((item) => item.text),
+  }));
+  const text = String(raw?.text || "").trim();
+  if (text.length < 20) throw new Error("empty take");
+  return text;
 }
 
 export async function draftAnnouncement(facts) {

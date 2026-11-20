@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { announceMode, announceRelease } from "./announce.mjs";
 import { chainMode, deriveEscrow, explorerUrl, PROGRAM_ID, programLive, pubkeyFor } from "./chain.mjs";
 import { escrowHistory, onFreeze, onFund, onRefund, onRelease } from "./escrow.mjs";
-import { draftAnnouncement, grokChecklist, grokConfigured, grokJudge } from "./grok.mjs";
+import { draftAnnouncement, grokChecklist, grokConfigured, grokJudge, grokSample } from "./grok.mjs";
 import { parseAskMention } from "./mentions.mjs";
 import { parseStreamBody } from "./streams.mjs";
 import {
@@ -316,10 +316,18 @@ export async function sampleJob(userId, jobId, mode) {
   const job = jobById(jobId);
   if (me.id !== job.creatorId) throw new Error("Only the creator fills this in.");
   const creator = userById(job.creatorId);
-  return sampleFor(job.items, mode === "fail" ? "fail" : "pass", {
-    kind: job.kind === "shoutout" ? "shoutout" : "work",
-    creatorName: creator.name,
-  });
+  const kind = job.kind === "shoutout" ? "shoutout" : "work";
+  const local = sampleFor(job.items, mode === "fail" ? "fail" : "pass", { kind, creatorName: creator.name });
+  if (mode === "fail" || !grokConfigured()) return local;
+  try {
+    const text = await grokSample(job.brief, job.items, kind, creator.name);
+    // Keep the local take when this one would trip the guard on its own.
+    if (guard({ items: [], passed: true }, job, text).passed) return { ...local, text };
+    console.warn("[holler] grok sample tripped the guard, using the local take");
+  } catch (error) {
+    console.warn(`[holler] grok sample fallback (${error.message})`);
+  }
+  return local;
 }
 
 // Text that tries to steer the judge instead of being the work.
