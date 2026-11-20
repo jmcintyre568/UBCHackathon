@@ -44,15 +44,26 @@ flowchart LR
 
 Devnet keys, the fee payer, and a later mainnet swap are in [SETUP.md](SETUP.md). This program is a hackathon build. Do not put real funds in it.
 
+## Live on devnet
+
+| What | Link |
+| --- | --- |
+| Program | [DN664BTn…Mgvh](https://explorer.solana.com/address/DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh?cluster=devnet) |
+| Deploy | [5EMFD5NQ…Ud76](https://explorer.solana.com/tx/5EMFD5NQbimXVp15RgfHbnkFpa1iphAuTm7EXhyiQFPbcRZ4iiDbfBiAcnSVENV3B7vVFbjd4Qypi28aryJdUd76?cluster=devnet) |
+| Hold $28 (`create_escrow` + `fund_escrow`) | [4GgXFTgU…9MhN](https://explorer.solana.com/tx/4GgXFTgUymLrAT3w3pL1oUksXUXHkP5fwbmDiHSmA2qUN48CE5Hp9phEhaAJJzargDavqN7S9xoHytU9F5A49MhN?cluster=devnet) |
+| Release after the judge passes (`submit_milestone` + `approve_milestone`) | [xayQLNcg…MmT7](https://explorer.solana.com/tx/xayQLNcgCYuDUAqjWoTtBSmstoEgWhzG4MzdrU5dzJP8SJz3s1vAQo8x7qLSCdQBKKxMsvzb1ogJ8ZyAtEQMmT7?cluster=devnet) |
+
+Every transaction is signed by the buyer's or creator's embedded wallet and paid for by the app's fee payer, `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`. Each one carries a `holler …` memo so a QuickNode Stream can pick it up.
+
 ## Demo
 
-[48-second walkthrough](media/holler-demo.mp4): scroll the feed, ask Leo for a shoutout, hold $28, watch the judge check each line, then the receipt and the You page.
+[53-second walkthrough](media/holler-demo.mp4), recorded on devnet with the live Grok judge: scroll the feed, ask Leo for a shoutout, Grok writes the checklist, hold $28, Grok flags a take that misses and the money stays held, Leo resubmits, Grok passes every line and the hold releases, then the receipt, the transaction on Solana Explorer, and the You page. Waits for Grok and the network are cut.
 
 | Feed | A pass and a miss | Released | Receipt |
 | --- | --- | --- | --- |
 | ![Home feed](media/feed-top.png) | ![Flagged recap on the feed](media/feed-scrolled.png) | ![Released checklist](media/released.png) | ![Share card](media/receipt.png) |
 
-On a fresh start you are Maya. Open Leo, leave the Sam / UT / cheer note, tap **Write the checklist**, then **Hold $28**. **Continue** switches the phone to Leo. **Fill a take that passes** and **Send it**. The checklist goes green. **View receipt** is the share card. **View on explorer** appears after the devnet program is deployed and the transaction has a signature. **Fill a take that misses** leaves the money held.
+On a fresh start you are Maya. Open Leo, leave the Sam / UT / cheer note, tap **Write the checklist**, then **Hold $28**. **Continue** switches the phone to Leo. **Fill a take that passes** and **Send it**. The checklist goes green. **View receipt** is the share card. **View on explorer** opens the transaction on Solana Explorer. **Fill a take that misses** leaves the money held, and **Try another take** sends it again. The seeded feed jobs are put on devnet the first time the app starts, so their receipts have explorer links too.
 
 Switch people from the face at the top left. Eden's Northroom board is the same hold, assigned by a studio.
 

@@ -42,7 +42,7 @@ The script writes two gitignored keys:
 - `target/deploy/trustlancer_escrow-keypair.json` from the label `holler-devnet-demo-program-v1`
 - `data/fee-payer.json` from the label `holler-fee-payer-v1`
 
-It builds the program, checks the fee payer's balance, and deploys. It reads `SOLANA_RPC_URL` from `.env` when it is set. The public RPC faucet is closed, so the script stops and says how much SOL is missing. Use https://faucet.solana.com while signed in with GitHub and send it to the demo fee payer `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`. A first deploy holds the program rent and a same-size buffer at once, about 2.6 SOL for this build. Request 5 SOL so the app has room for its own transactions. Then run the script again.
+It builds the program, checks the fee payer's balance, and deploys through public devnet. QuickNode endpoints refuse the large batches a deploy sends (HTTP 413), so `SOLANA_RPC_URL` is not used here. Set `DEPLOY_RPC_URL` to pick another endpoint. The public RPC faucet is closed, so the script stops and says how much SOL is missing. Use https://faucet.solana.com while signed in with GitHub and send it to the demo fee payer `9DHA77NkTk5aqqDF3BpJKgZn9qXvpu19A4bDXCkFtTfi`. That faucet only serves GitHub accounts with some public repos. If yours is new, ask a teammate, or use https://faucet.quicknode.com/solana/devnet. A first deploy holds the program rent and a same-size buffer at once, about 2.6 SOL for this build. Request 5 SOL so the app has room for its own transactions. Then run the script again.
 
 Check it is live:
 
@@ -165,6 +165,7 @@ HOLLER_HOOK_SECRET
 QUICKNODE_WEBHOOK_SECRET
 SOLANA_CLUSTER
 SOLANA_RPC_URL
+DEPLOY_RPC_URL
 USDC_MINT
 FEE_PAYER_KEYPAIR
 HOLLER_SKIP_CHAIN

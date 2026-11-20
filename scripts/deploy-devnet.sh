@@ -51,10 +51,10 @@ if [[ "$so" != target/deploy/trustlancer_escrow.so ]]; then
   cp "$so" target/deploy/trustlancer_escrow.so
 fi
 
-if [[ -z "${SOLANA_RPC_URL:-}" && -f .env ]]; then
-  SOLANA_RPC_URL="$(sed -n 's/^SOLANA_RPC_URL=//p' .env | tr -d '\r"'"'" | head -1)"
-fi
-rpc="${SOLANA_RPC_URL:-https://api.devnet.solana.com}"
+# The deploy writes the program in large batches. QuickNode endpoints refuse
+# those (413), so it goes through public devnet unless DEPLOY_RPC_URL says
+# otherwise. The app still uses SOLANA_RPC_URL for its own transactions.
+rpc="${DEPLOY_RPC_URL:-https://api.devnet.solana.com}"
 payer="$(solana address -k data/fee-payer.json)"
 
 # A first deploy holds the program rent and a same-size buffer at once. An
