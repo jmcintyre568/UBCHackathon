@@ -167,7 +167,7 @@ function tabbar() {
 }
 
 function frame({ back, title, body, dock = "", tabs = !back }) {
-  return `${back ? backbar(back, title) : appbar()}<main class="view" id="view">${body}</main>${dock}${tabs ? tabbar() : ""}<div id="toast" role="status"></div><div id="sheet" hidden></div>`;
+  return `${back ? backbar(back, title) : appbar()}<main class="view" id="view">${body}</main>${dock}${tabs ? tabbar() : ""}<div id="toast" class="toast" role="status"></div><div id="sheet" hidden></div>`;
 }
 
 function banner() {
