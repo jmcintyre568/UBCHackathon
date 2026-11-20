@@ -5,10 +5,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-trustlancer_escrow = "DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS"
+trustlancer_escrow = "DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh"
 
 [programs.localnet]
-trustlancer_escrow = "DWf2Aht8cLrXgFwzhWVc3my1qsaVtTbxwsSz31Bh6zNS"
+trustlancer_escrow = "DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh"
 
 [provider]
 cluster = "devnet"

@@ -1,45 +1,71 @@
-# TrustLancer
+# Holler
 
-A responsive, interactive prototype for the UBC 2026 hackathon concept: a freelance marketplace with milestone escrow and portable reputation.
+Holler is Cameo with the money locked until the work is real. You ask a creator for a shoutout, or a freelancer for the edit, the page, the logo, in plain words. A judge writes the checklist you didn't know to ask for, then checks the deliverable before the escrow pays. It feels like a social app. The chain shows up on the receipt.
+
+Built for the UBC 2026 hackathon, Consumer Applications track. The escrow is the Solana program in `programs/trustlancer_escrow`.
 
 ## Run it
 
-Open `index.html` in a browser. There is no build step or package install.
-
-## Solana escrow program scaffold
-
-The `programs/trustlancer_escrow` Anchor program is the first onchain implementation step. It defines an SPL token escrow with up to eight ordered milestones, funding, freelancer submission by deliverable hash, client approval and release, dispute freeze, and a mutual refund that requires both parties to sign.
-
-This is a development scaffold, not audited and not suitable for real funds. Disputes deliberately freeze the remaining funds; there is no arbitrator resolution or timeout/refund policy yet. The program accepts the original SPL Token Program and stores the selected mint, but does not enforce a canonical USDC mint.
-
-The program ID is generated for this project and must stay synchronized between `Anchor.toml`, `programs/trustlancer_escrow/src/lib.rs`, and the ignored `target/deploy/trustlancer_escrow-keypair.json`. Do not commit or share private key files.
-
-### Run escrow integration tests
-
-Install Node.js, npm, the Solana CLI, Rust, and Anchor CLI. Then run:
-
 ```sh
 npm install
-npm test
+npm start
 ```
 
-The test command builds the program, starts a temporary local validator, deploys there, and runs tests for invalid milestone totals, ordered payouts, token accounting, and mutual refunds. It creates and removes a disposable test wallet and ledger under the ignored `target/` directory. It does not deploy to Devnet.
+Open http://localhost:5173. The first screen is a phone. You're Maya. No wallet install, no seed phrase. Each person has an embedded wallet the server holds, and the app pays the network fee.
 
-## Current prototype
+By default the app uses Solana devnet. After `scripts/deploy-devnet.sh`, hold, submit, release, and refund are transactions on the escrow program, and the receipt links to the explorer. Without that deploy, the same screens run on an in-process ledger. `SETUP.md` is the list of accounts and keys for Grok, X, and QuickNode.
 
-- Freelancer workspace dashboard with contract, reputation, and discovery views.
-- Project creation modal with a local demo milestone suggestion flow.
-- Buttons and feedback for profile, credentials, and contract actions.
-- Demo data is static and clearly presented as a test-network experience.
+```sh
+npm run test:app
+```
 
-The milestone generator and marketplace data are currently demo placeholders. The wallet button connects to Phantom in the browser when the extension is installed and reads that address's SOL balance from the configured Solana Devnet RPC. It does not verify Phantom's selected cluster or submit transactions. The UI must not be presented as real escrow or onchain reputation yet.
+That checks the checklist, the judge, a hold through release and refund, an X mention, and a QuickNode event.
 
-## Next steps to make this real
+## Two-minute demo
 
-1. Expand tests to cover authorization, disputes, and additional invalid transitions.
-2. Add a trusted Devnet USDC mint allowlist and a clearly defined dispute-resolution/timeout policy before deploying.
-3. Deploy to Solana Devnet and connect the frontend to the generated IDL for create, fund, submit, approve, dispute, and refund transactions.
-4. Replace local sample data with program account reads and transaction status.
-5. Add an API-backed scope parser and a Solana-compatible reputation attestation flow after settlement.
+1. On Home, open Leo Park.
+2. Leave the birthday note as it is and tap **Write the checklist**. Priya, nursing school, the length, and the "don't joke about her being late" line should all be there. Remove or add a line if you want.
+3. Tap **Hold $28**. The dollars sit in escrow.
+4. Tap **Continue** to use the phone as Leo. **Fill a take that passes**, then **Send it**.
+5. The checklist turns green and the $28 releases. Open the receipt. **View on explorer** opens the devnet transaction once the program is deployed.
+6. Do it once more with **Fill a take that misses**. The money stays held. Maya can pay anyway, or both people can send it back. On You, as Leo, posting to X is a toggle. It stays a draft until the X keys are set.
 
-The current balance read uses Solana's public Devnet RPC and needs no API key. To build/deploy, the team will need Rust, Solana CLI, Anchor CLI, Phantom, Devnet SOL, and a project-owned program keypair. To make the scope parser real, we will also need an AI API key; keep it server-side and never put secrets in browser code.
+Switch people from the face at the top left. Priya, Noah, and Eden are there too. Eden's **Northroom** board is the light studio view: a manager assigning the same kind of hold.
+
+## The judge and X
+
+Set `XAI_API_KEY` and the checklist, the verdict, and the release post come from Grok (`XAI_MODEL`, default `grok-3`). If the key is missing, or Grok doesn't answer, `server/logic.mjs` is the demo judge. The screen says which one checked the work.
+
+A creator opts in on the You page. With the four X user tokens set, that post is published. A mention of `@holler ask @leo ...` becomes a funded ask when `X_BEARER_TOKEN` is set, or when something POSTs the mention to `/api/hooks/x`.
+
+## QuickNode
+
+Point `SOLANA_RPC_URL` at a QuickNode devnet endpoint and stream matching transactions to `/api/hooks/quicknode`. The filter is `quicknode/filter.js`. Those deliveries update the home strip, the activity bell, and the receipt. The setup steps are in `SETUP.md`.
+
+## Escrow
+
+`programs/trustlancer_escrow` is an Anchor program. One escrow, up to eight milestones, SPL tokens. The app uses a single milestone per ask and follows the program's rules:
+
+| What you do in the app | Instruction |
+| --- | --- |
+| Hold the price | `create_escrow`, then `fund_escrow` |
+| Send work that passes | `submit_milestone`, then `approve_milestone` |
+| Freeze the hold | `raise_dispute` |
+| Both people send it back | `mutually_refund` |
+
+A failed checklist does not submit on-chain. The creator can try again while the funds stay in the active escrow. The account shown on the receipt is derived with the program's seeds: `["escrow", buyer, id]`.
+
+The program id is `DN664BTnmAuz1aJNYEJ2HHctRxgRjkRejdyjZ9pjMgvh`. It is a development program, not audited, and not for real funds. `npm test` builds it and runs the Anchor tests when the Solana and Anchor CLIs are installed. That suite does not run as part of `npm start`. Mainnet needs a new program key, a real fee-payer keypair, and the official USDC mint. `SETUP.md` has those steps. The demo seed is refused when `SOLANA_CLUSTER=mainnet-beta`.
+
+## Money, in plain terms
+
+Prices are USDC and shown as dollars. One dollar is one USDC. The buyer funds the whole amount before work starts. There is no platform fee in this demo. The creator is paid only when every checklist line passes, or when the buyer releases anyway. A freeze stays frozen until both people refund, which is the program's rule. Users don't hold SOL.
+
+The demo judge can miss sarcasm or a paraphrase. Grok is the judge when a key is set, and the buyer can override a miss. This is a hackathon build. Don't put real money in it.
+
+## Where things live
+
+- `web/` is the phone UI.
+- `server/` is the API, the demo data, the judge, and the chain notes.
+- `programs/trustlancer_escrow` is the escrow program.
+- `tests/` is the Anchor suite.

@@ -1,5 +1,6 @@
 /target/
 /node_modules/
+/data/
 /.anchor/
 /test-ledger/
 /.env
